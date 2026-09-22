@@ -4,10 +4,15 @@ import type { CStruct, XzType } from "../xzint/ast.js";
 
 export type FfiScalar = "bool" | "int64" | "uint64" | "double" | "char" | "ptr" | "void";
 
+export interface FfiStructField {
+  readonly name: string;
+  readonly type: FfiType;
+}
+
 export interface FfiStruct {
   readonly kind: "struct";
   readonly name: string;
-  readonly fields: readonly FfiType[];
+  readonly fields: readonly FfiStructField[];
 }
 
 export type FfiType = FfiScalar | FfiStruct;
@@ -18,8 +23,22 @@ const PRIMITIVE_FFI: Readonly<Record<PrimitiveName, FfiType>> = {
   usize: "uint64",
   Float: "double",
   Char: "char",
-  Str: { kind: "struct", name: "XzStr", fields: ["ptr", "uint64"] },
-  Bytes: { kind: "struct", name: "XzBytes", fields: ["ptr", "uint64"] },
+  Str: {
+    kind: "struct",
+    name: "XzStr",
+    fields: [
+      { name: "ptr", type: "ptr" },
+      { name: "len", type: "uint64" },
+    ],
+  },
+  Bytes: {
+    kind: "struct",
+    name: "XzBytes",
+    fields: [
+      { name: "ptr", type: "ptr" },
+      { name: "len", type: "uint64" },
+    ],
+  },
   Ptr: "ptr",
   Unit: "void",
 };
@@ -65,6 +84,9 @@ function mapType(
   return {
     kind: "struct",
     name: record.name,
-    fields: record.fields.map((field) => mapType(field.type, cstructs, "field", nested)),
+    fields: record.fields.map((field) => ({
+      name: field.name,
+      type: mapType(field.type, cstructs, "field", nested),
+    })),
   };
 }

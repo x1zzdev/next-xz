@@ -28,12 +28,18 @@ test("maps Str and Bytes to two-field pointer/length structs", () => {
   assert.deepEqual(mapXzTypeToFfi(named("Str"), noStructs), {
     kind: "struct",
     name: "XzStr",
-    fields: ["ptr", "uint64"],
+    fields: [
+      { name: "ptr", type: "ptr" },
+      { name: "len", type: "uint64" },
+    ],
   });
   assert.deepEqual(mapXzTypeToFfi(named("Bytes"), noStructs), {
     kind: "struct",
     name: "XzBytes",
-    fields: ["ptr", "uint64"],
+    fields: [
+      { name: "ptr", type: "ptr" },
+      { name: "len", type: "uint64" },
+    ],
   });
 });
 
@@ -46,8 +52,28 @@ test("maps a @cstruct record, including nested records", () => {
     kind: "struct",
     name: "Line",
     fields: [
-      { kind: "struct", name: "Point", fields: ["int64", "int64"] },
-      { kind: "struct", name: "Point", fields: ["int64", "int64"] },
+      {
+        name: "a",
+        type: {
+          kind: "struct",
+          name: "Point",
+          fields: [
+            { name: "x", type: "int64" },
+            { name: "y", type: "int64" },
+          ],
+        },
+      },
+      {
+        name: "b",
+        type: {
+          kind: "struct",
+          name: "Point",
+          fields: [
+            { name: "x", type: "int64" },
+            { name: "y", type: "int64" },
+          ],
+        },
+      },
     ],
   });
 });
@@ -77,7 +103,17 @@ test("builds a manifest: mut params become pointers, returns keep their type", (
   });
   assert.equal(manifest.xzVersion, "0.1.0");
   assert.deepEqual(manifest.symbols["parse_amount"], {
-    args: [{ kind: "struct", name: "XzStr", fields: ["ptr", "uint64"] }, "ptr"],
+    args: [
+      {
+        kind: "struct",
+        name: "XzStr",
+        fields: [
+          { name: "ptr", type: "ptr" },
+          { name: "len", type: "uint64" },
+        ],
+      },
+      "ptr",
+    ],
     returns: "int64",
   });
 });

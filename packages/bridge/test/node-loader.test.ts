@@ -38,7 +38,16 @@ test("KoffiBackend refuses to bind a struct passed by value", () => {
     () =>
       backend.dlopen("liborder.so", {
         parse: {
-          args: [{ kind: "struct", name: "XzStr", fields: ["ptr", "uint64"] }],
+          args: [
+            {
+              kind: "struct",
+              name: "XzStr",
+              fields: [
+                { name: "ptr", type: "ptr" },
+                { name: "len", type: "uint64" },
+              ],
+            },
+          ],
           returns: "void",
         },
       }),

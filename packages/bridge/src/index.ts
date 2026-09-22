@@ -31,7 +31,7 @@ export {
 } from "./type-map.js";
 export type { PrimitiveMapping, PrimitiveName, TypePosition } from "./type-map.js";
 export { mapXzTypeToFfi } from "./ffi/types.js";
-export type { FfiScalar, FfiStruct, FfiType } from "./ffi/types.js";
+export type { FfiScalar, FfiStruct, FfiStructField, FfiType } from "./ffi/types.js";
 export { manifestFromInterface } from "./ffi/manifest.js";
 export type { LibraryManifest, ManifestInput, SymbolDefinition } from "./ffi/manifest.js";
 export { loadLibrary } from "./loader/load.js";
