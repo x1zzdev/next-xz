@@ -1,0 +1,31 @@
+// Order pricing surface for `@xz-lang/bridge`. Only `@export` functions become
+// symbols; everything else keeps internal linkage. The boundary these exports
+// expose is declared once in order.xzint and the TypeScript binding is
+// generated from that file.
+
+@cstruct record LineItem {
+    quantity: Int
+    unit_price: Float
+}
+
+/// Multiplies a line item's quantity by its unit price.
+/// @intent  Returns quantity * unit_price.
+/// @ensures result >= 0.0
+/// @effects none
+@export func line_total(item: LineItem) -> Float
+    post result >= 0.0
+{
+    (item.quantity as Float) * item.unit_price
+}
+
+/// Computes the payable total for an order.
+/// @intent  Sums line items and applies the tax rate.
+/// @requires subtotal is non-negative
+/// @ensures result >= 0.0
+/// @effects none
+@export func payable_total(subtotal: Float, tax_rate: Float) -> Float
+    pre  subtotal >= 0.0
+    post result >= 0.0
+{
+    subtotal * (1.0 + tax_rate)
+}

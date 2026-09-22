@@ -1,0 +1,17 @@
+{
+  "extends": "../tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "paths": {
+      "@xz-lang/bridge": ["../packages/bridge/src/index.ts"]
+    }
+  },
+  "include": [
+    "app/**/*.ts",
+    "scripts/**/*.ts",
+    "src/**/*.ts",
+    "test/**/*.ts",
+    "../packages/bridge/src/loader/bun-ffi.d.ts",
+    "../packages/bridge/src/loader/koffi.d.ts"
+  ]
+}

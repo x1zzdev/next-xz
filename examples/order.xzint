@@ -1,0 +1,10 @@
+// Boundary of order.xz. `@xz-lang/bridge` generates src/xz/order.ts from this
+// file; the exported signatures must stay in step with order.xz.
+
+@cstruct record LineItem {
+    quantity: Int
+    unit_price: Float
+}
+
+extern func line_total(item: LineItem) -> Float
+extern func payable_total(subtotal: Float, tax_rate: Float) -> Float

@@ -1,0 +1,19 @@
+{
+  "name": "@xz-lang/example-order",
+  "version": "0.1.0-draft",
+  "private": true,
+  "description": "Worked example: order.xz to generated TypeScript binding to a Next.js Server Action.",
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "generate": "tsx scripts/generate.ts",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "node --import tsx --test \"test/**/*.test.ts\""
+  },
+  "dependencies": {
+    "@xz-lang/bridge": "0.1.0-draft"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
