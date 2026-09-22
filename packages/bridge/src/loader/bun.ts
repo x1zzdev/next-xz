@@ -47,7 +47,7 @@ export class BunFfiBackend implements FfiBackend {
   private toFfiType(type: FfiType): number {
     if (typeof type !== "string") {
       throw new BridgeRuntimeError(
-        `bun:ffi cannot pass '${type.name}' by value; pointer-based struct marshalling is not implemented yet`,
+        `bun:ffi cannot declare struct '${type.name}' by value; use the Node koffi loader for Str/Bytes/@cstruct symbols`,
       );
     }
     const value = this.ffi.FFIType[BUN_FFI_KEY[type]];

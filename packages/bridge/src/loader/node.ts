@@ -1,12 +1,16 @@
 import { BridgeRuntimeError } from "../errors.js";
 import type { LibraryManifest, SymbolDefinition } from "../ffi/manifest.js";
-import type { FfiScalar, FfiType } from "../ffi/types.js";
+import type { FfiScalar, FfiStruct, FfiType } from "../ffi/types.js";
 import type { FfiBackend, FfiLibrary } from "./ffi-backend.js";
 import { loadLibrary, type LoadOptions, type LoadedLibrary } from "./load.js";
 
+export type KoffiType = object;
+
+export type KoffiFieldType = string | KoffiType;
+
 export interface KoffiSignature {
-  readonly ret: string;
-  readonly args: readonly string[];
+  readonly ret: KoffiFieldType;
+  readonly args: readonly KoffiFieldType[];
 }
 
 export interface KoffiFunction {
@@ -20,6 +24,7 @@ export interface KoffiLibrary {
 
 export interface KoffiModule {
   load(path: string): KoffiLibrary;
+  struct(name: string, fields: Readonly<Record<string, KoffiFieldType>>): KoffiType;
 }
 
 const KOFFI_SCALAR: Readonly<Record<FfiScalar, string>> = {
@@ -33,14 +38,16 @@ const KOFFI_SCALAR: Readonly<Record<FfiScalar, string>> = {
 };
 
 export class KoffiBackend implements FfiBackend {
+  private readonly structs = new Map<string, KoffiType>();
+
   constructor(private readonly koffi: KoffiModule) {}
 
   dlopen(path: string, symbols: Readonly<Record<string, SymbolDefinition>>): FfiLibrary {
     const signatures: Record<string, KoffiSignature> = {};
     for (const [name, definition] of Object.entries(symbols)) {
       signatures[name] = {
-        ret: toKoffiType(definition.returns, name, "return"),
-        args: definition.args.map((type, index) => toKoffiType(type, name, `arg ${index}`)),
+        ret: this.toKoffiType(definition.returns),
+        args: definition.args.map((type) => this.toKoffiType(type)),
       };
     }
 
@@ -51,15 +58,27 @@ export class KoffiBackend implements FfiBackend {
     }
     return { symbols: bound, close: () => library.close?.() };
   }
-}
 
-function toKoffiType(type: FfiType, symbol: string, position: string): string {
-  if (typeof type !== "string") {
-    throw new BridgeRuntimeError(
-      `koffi cannot bind struct '${type.name}' by value for '${symbol}' (${position}); struct marshalling is not implemented yet`,
-    );
+  private toKoffiType(type: FfiType): KoffiFieldType {
+    if (typeof type === "string") {
+      return KOFFI_SCALAR[type];
+    }
+    return this.registerStruct(type);
   }
-  return KOFFI_SCALAR[type];
+
+  private registerStruct(type: FfiStruct): KoffiType {
+    const existing = this.structs.get(type.name);
+    if (existing !== undefined) {
+      return existing;
+    }
+    const fields: Record<string, KoffiFieldType> = {};
+    for (const field of type.fields) {
+      fields[field.name] = this.toKoffiType(field.type);
+    }
+    const registered = this.koffi.struct(type.name, fields);
+    this.structs.set(type.name, registered);
+    return registered;
+  }
 }
 
 export async function loadKoffiBackend(): Promise<KoffiBackend> {

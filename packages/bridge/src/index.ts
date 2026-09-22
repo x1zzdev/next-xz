@@ -41,8 +41,10 @@ export { BunFfiBackend, loadBunBackend, loadBunLibrary } from "./loader/bun.js";
 export type { BunFfiFunction, BunFfiLibrary, BunFfiModule } from "./loader/bun.js";
 export { KoffiBackend, loadKoffiBackend, loadNodeLibrary } from "./loader/node.js";
 export type {
+  KoffiFieldType,
   KoffiFunction,
   KoffiLibrary,
   KoffiModule,
   KoffiSignature,
+  KoffiType,
 } from "./loader/node.js";

@@ -74,18 +74,23 @@ the C in/out convention.
 The signature is expressed in backend-neutral FFI types (`bool`, `int64`,
 `uint64`, `double`, `char`, `ptr`, `void`, and named structs), so the Bun and
 Node loaders share one description. `Str`/`Bytes` are the `XzStr`/`XzBytes`
-pointer/length structs.
+pointer/length structs. A struct carries its field names so a backend can
+register its layout.
 
 `bun:ffi` registers only scalar and pointer FFIType values; it cannot declare a
 struct passed by value. A symbol whose signature contains `Str`, `Bytes`, or a
-`@cstruct` therefore fails at load time with `BridgeRuntimeError` until the
-marshalling slice defines a pointer-based path. The loader never degrades the
-signature silently.
+`@cstruct` therefore fails at load time with `BridgeRuntimeError`. The loader
+never degrades the signature silently.
 
-The Node loader over `koffi` can declare by-value structs, but the bridge keeps
-one canonical call shape across runtimes: struct-valued signatures are deferred
-to the marshalling slice there too, and fail at load time with the same
-`BridgeRuntimeError`.
+The Node loader over `koffi` declares by-value structs, so `Str`/`Bytes`/
+`@cstruct` symbols load and call on Node: `koffi.struct` registers each layout
+(inner records first) and the registered type is used in the function
+signature. The two runtimes therefore differ in capability, not in API: a
+program that needs struct-valued exports must run on Node until `bun:ffi` gains
+by-value struct support.
+
+The encode/decode of a JavaScript `string` or `Uint8Array` into an `XzStr`/
+`XzBytes` value belongs to the generated binding (§4.2), not the loader.
 
 ## 4. Marshalling
 

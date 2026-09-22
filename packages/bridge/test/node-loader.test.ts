@@ -5,56 +5,110 @@ import {
   BridgeRuntimeError,
   KoffiBackend,
   loadKoffiBackend,
+  manifestFromInterface,
+  parseInterface,
+  type KoffiFieldType,
+  type KoffiModule,
   type KoffiSignature,
 } from "../src/index.js";
 
-test("KoffiBackend maps neutral FFI types to a koffi signature", () => {
-  const captured: KoffiSignature[] = [];
-  const backend = new KoffiBackend({
-    load: (_path) => ({
-      func: (signature) => {
-        captured.push(signature);
-        return () => 0;
+interface FakeKoffi {
+  readonly module: KoffiModule;
+  readonly registrations: Array<Record<string, unknown>>;
+  readonly signatures: KoffiSignature[];
+  readonly loadedPaths: string[];
+}
+
+function fakeKoffi(): FakeKoffi {
+  const registrations: Array<Record<string, unknown>> = [];
+  const signatures: KoffiSignature[] = [];
+  const loadedPaths: string[] = [];
+  return {
+    registrations,
+    signatures,
+    loadedPaths,
+    module: {
+      load: (path) => {
+        loadedPaths.push(path);
+        return {
+          func: (signature) => {
+            signatures.push(signature);
+            return () => 0;
+          },
+          close: () => {},
+        };
       },
-      close: () => {},
-    }),
-  });
+      struct: (name, fields: Readonly<Record<string, KoffiFieldType>>) => {
+        const token = { name };
+        registrations.push({ name, fields, token });
+        return token;
+      },
+    },
+  };
+}
+
+test("KoffiBackend maps neutral FFI scalars to a koffi signature", () => {
+  const koffi = fakeKoffi();
+  const backend = new KoffiBackend(koffi.module);
   const library = backend.dlopen("liborder.so", {
     add: { args: ["int64", "uint64"], returns: "void" },
   });
-  assert.deepEqual(captured, [{ ret: "void", args: ["int64_t", "uint64_t"] }]);
+  assert.deepEqual(koffi.signatures, [{ ret: "void", args: ["int64_t", "uint64_t"] }]);
   assert.equal(typeof library.symbols["add"], "function");
 });
 
-test("KoffiBackend refuses to bind a struct passed by value", () => {
-  let loaded = false;
-  const backend = new KoffiBackend({
-    load: (_path) => {
-      loaded = true;
-      return { func: () => () => 0, close: () => {} };
-    },
+test("KoffiBackend registers an XzStr struct and passes it by value", () => {
+  const koffi = fakeKoffi();
+  const backend = new KoffiBackend(koffi.module);
+  const iface = parseInterface("extern func show(text: Str) -> Int\n");
+  const manifest = manifestFromInterface(iface, {
+    name: "liborder",
+    path: "liborder.so",
+    xzVersion: "0.1.0",
   });
-  assert.throws(
-    () =>
-      backend.dlopen("liborder.so", {
-        parse: {
-          args: [
-            {
-              kind: "struct",
-              name: "XzStr",
-              fields: [
-                { name: "ptr", type: "ptr" },
-                { name: "len", type: "uint64" },
-              ],
-            },
-          ],
-          returns: "void",
-        },
-      }),
-    (error: unknown) =>
-      error instanceof BridgeRuntimeError && error.message.includes("XzStr"),
+  backend.dlopen(manifest.path, manifest.symbols);
+
+  const token = koffi.registrations[0]?.["token"];
+  assert.deepEqual(koffi.registrations[0]?.["fields"], { ptr: "void *", len: "uint64_t" });
+  assert.deepEqual(koffi.signatures, [{ ret: "int64_t", args: [token] }]);
+});
+
+test("KoffiBackend registers nested @cstruct records inner-first and reuses tokens", () => {
+  const koffi = fakeKoffi();
+  const backend = new KoffiBackend(koffi.module);
+  const iface = parseInterface(
+    "@cstruct record Point {\n    x: Int\n    y: Int\n}\n@cstruct record Line {\n    a: Point\n    b: Point\n}\nextern func midline(line: Line) -> Point\n",
   );
-  assert.equal(loaded, false);
+  const manifest = manifestFromInterface(iface, {
+    name: "liborder",
+    path: "liborder.so",
+    xzVersion: "0.1.0",
+  });
+  backend.dlopen(manifest.path, manifest.symbols);
+
+  assert.deepEqual(
+    koffi.registrations.map((entry) => entry["name"]),
+    ["Point", "Line"],
+  );
+  const point = koffi.registrations[0]?.["token"];
+  const lineFields = koffi.registrations[1]?.["fields"] as Record<string, unknown>;
+  assert.equal(lineFields["a"], point);
+  assert.equal(lineFields["b"], point);
+  const line = koffi.registrations[1]?.["token"];
+  assert.deepEqual(koffi.signatures, [{ ret: point, args: [line] }]);
+});
+
+test("KoffiBackend registers each struct once across symbols", () => {
+  const koffi = fakeKoffi();
+  const backend = new KoffiBackend(koffi.module);
+  const iface = parseInterface("extern func a(text: Str) -> Int\nextern func b(text: Str) -> Int\n");
+  const manifest = manifestFromInterface(iface, {
+    name: "liborder",
+    path: "liborder.so",
+    xzVersion: "0.1.0",
+  });
+  backend.dlopen(manifest.path, manifest.symbols);
+  assert.equal(koffi.registrations.length, 1);
 });
 
 test("KoffiBackend closes the loaded library", () => {
@@ -66,6 +120,7 @@ test("KoffiBackend closes the loaded library", () => {
         closed = true;
       },
     }),
+    struct: () => ({}),
   });
   const library = backend.dlopen("liborder.so", { add: { args: [], returns: "int64" } });
   library.close();
