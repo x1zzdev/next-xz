@@ -32,6 +32,8 @@ export function bind(backend: FfiBackend): Binding {
     payable_total(subtotal, tax_rate) {
       return symbols["payable_total"]!(subtotal, tax_rate) as number;
     },
-    close: () => loaded.close(),
+    close: () => {
+      loaded.close();
+    },
   };
 }
