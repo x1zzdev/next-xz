@@ -7,3 +7,5 @@ export type {
 } from "./effects.js";
 export { extractDocClaims, extractSignature } from "./extract.js";
 export type { DocClaims, TrustedClaim } from "./extract.js";
+export { buildAuditCard } from "./card.js";
+export type { AuditCard, AuditCardInput, AuditStatus } from "./card.js";
