@@ -108,7 +108,7 @@ Data rendered per module:
 
 | Field | Source |
 |---|---|
-| Signature | Xz AST / `xz check --verbose` |
+| Signature | Xz source (compiler AST dump planned) |
 | `@intent` prose | doc comment |
 | Declared `@effects` | doc comment |
 | Derived `@effects` | compiler effect derivation |

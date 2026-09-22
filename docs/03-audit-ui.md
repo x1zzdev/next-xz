@@ -74,9 +74,12 @@ unless a developer explicitly overrides with a recorded note.
 ```
 
 The AST-based extraction tool is the Phase 3 deliverable. Until the compiler
-exposes a full AST dump, extraction uses `xz check --verbose` plus the doc
-comments parsed from source. The interface is designed so a richer compiler
-output can replace the parser without changing the card model.
+exposes a full AST dump, extraction reads `xz check-json` diagnostics plus the
+doc comments parsed from source. The compiler does not yet emit the derived
+effect profile (`xz check --verbose` does not exist), so the card carries
+`derivedEffects` as a field the extraction fills once that surface exists. The
+interface is designed so a richer compiler output can replace the parser
+without changing the card model.
 
 ## 7. Card model (planned)
 
