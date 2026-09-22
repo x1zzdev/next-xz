@@ -5,3 +5,5 @@ export type {
   EffectBadgeView,
   EffectLabel,
 } from "./effects.js";
+export { extractDocClaims, extractSignature } from "./extract.js";
+export type { DocClaims, TrustedClaim } from "./extract.js";
