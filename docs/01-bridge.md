@@ -63,6 +63,25 @@ The loader:
 A version mismatch throws `BridgeVersionError`. A missing symbol throws
 `BridgeSymbolError`. Both are actionable, not silent.
 
+### 3.1 Library metadata
+
+The loader consumes a `LibraryManifest`: the shared-object path, the Xz compiler
+version the object was built with, and one C signature per symbol. The manifest
+is what the generator records alongside the `.so`; the loader never guesses a
+layout from source. A `mut` parameter is recorded as a pointer (`T*`), matching
+the C in/out convention.
+
+The signature is expressed in backend-neutral FFI types (`bool`, `int64`,
+`uint64`, `double`, `char`, `ptr`, `void`, and named structs), so the Bun and
+Node loaders share one description. `Str`/`Bytes` are the `XzStr`/`XzBytes`
+pointer/length structs.
+
+`bun:ffi` registers only scalar and pointer FFIType values; it cannot declare a
+struct passed by value. A symbol whose signature contains `Str`, `Bytes`, or a
+`@cstruct` therefore fails at load time with `BridgeRuntimeError` until the
+marshalling slice defines a pointer-based path. The loader never degrades the
+signature silently.
+
 ## 4. Marshalling
 
 ### 4.1 Scalars

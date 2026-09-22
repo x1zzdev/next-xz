@@ -21,3 +21,43 @@ export class NotCRepresentableError extends Error {
     this.xzType = xzType;
   }
 }
+
+export class BridgeDefinitionError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "BridgeDefinitionError";
+  }
+}
+
+export class BridgeVersionError extends Error {
+  readonly library: string;
+  readonly expected: string;
+  readonly actual: string;
+
+  constructor(library: string, expected: string, actual: string) {
+    super(`Xz version mismatch for '${library}': expected ${expected}, library built with ${actual}`);
+    this.name = "BridgeVersionError";
+    this.library = library;
+    this.expected = expected;
+    this.actual = actual;
+  }
+}
+
+export class BridgeSymbolError extends Error {
+  readonly library: string;
+  readonly symbol: string;
+
+  constructor(library: string, symbol: string, reason: string) {
+    super(`Symbol '${symbol}' in '${library}': ${reason}`);
+    this.name = "BridgeSymbolError";
+    this.library = library;
+    this.symbol = symbol;
+  }
+}
+
+export class BridgeRuntimeError extends Error {
+  constructor(message: string, options?: ErrorOptions) {
+    super(message, options);
+    this.name = "BridgeRuntimeError";
+  }
+}
