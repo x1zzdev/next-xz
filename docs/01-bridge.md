@@ -191,7 +191,7 @@ export function bind(backend: FfiBackend): Binding {
   const symbols = loaded.symbols as Readonly<Record<string, (...args: unknown[]) => unknown>>;
   return {
     payableTotal(subtotal, taxRate) {
-      return symbols["payableTotal"]!(subtotal, taxRate);
+      return symbols["payableTotal"]!(subtotal, taxRate) as number;
     },
     close: () => loaded.close(),
   };

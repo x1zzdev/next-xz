@@ -47,7 +47,7 @@ export function generateBinding(iface: Interface, options: GenerateOptions): str
   lines.push("");
   lines.push(...emitBindingInterface(iface, names));
   lines.push("");
-  lines.push(...emitBindFunction(iface));
+  lines.push(...emitBindFunction(iface, names));
   lines.push("");
   return lines.join("\n");
 }
@@ -151,7 +151,7 @@ function emitBindingInterface(iface: Interface, names: ReadonlySet<string>): str
   return lines;
 }
 
-function emitBindFunction(iface: Interface): string[] {
+function emitBindFunction(iface: Interface, names: ReadonlySet<string>): string[] {
   const lines = ["export function bind(backend: FfiBackend): Binding {"];
   lines.push(
     "  const loaded = loadLibrary(manifest, { expectedXzVersion: manifest.xzVersion, backend });",
@@ -168,8 +168,9 @@ function emitBindFunction(iface: Interface): string[] {
       lines.push(`      ${call};`);
       lines.push("    },");
     } else {
+      const returnTs = mapTypeToTs(func.returnType, names, "return");
       lines.push(`    ${func.name}(${params}) {`);
-      lines.push(`      return ${call};`);
+      lines.push(`      return ${call} as ${returnTs};`);
       lines.push("    },");
     }
   }

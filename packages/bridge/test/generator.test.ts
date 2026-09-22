@@ -61,6 +61,16 @@ test("rejects a Str field inside a @cstruct record", () => {
   assert.throws(() => generateBinding(iface, options), BridgeDefinitionError);
 });
 
+test("casts each symbol call to the declared TypeScript return type", () => {
+  const iface = parseInterface(
+    "@cstruct record Vec2 {\n    x: Int\n    y: Int\n}\nextern func add(a: Int, b: Int) -> Int\nextern func sum(v: Vec2) -> Int\nextern func run() -> Unit\n",
+  );
+  const source = generateBinding(iface, options);
+  assert.match(source, /return symbols\["add"\]!\(a, b\) as number;/);
+  assert.match(source, /return symbols\["sum"\]!\(v\) as number;/);
+  assert.match(source, /symbols\["run"\]!\(\);/);
+});
+
 test("generated module loads, calls a symbol, and closes through an injected backend", async () => {
   const iface = parseInterface("extern func add(a: Int, b: Int) -> Int\nextern func noop()\n");
   const source = generateBinding(iface, { ...options, importFrom: bridgeEntry });
