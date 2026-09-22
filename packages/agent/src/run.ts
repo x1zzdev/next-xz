@@ -5,6 +5,7 @@ import { dirname } from "node:path";
 import { runCheckJson, type ProcessRunner } from "./check.js";
 import type { Diagnostic } from "./diagnostics.js";
 import { AgentScopeError } from "./errors.js";
+import { computeRunMetrics, type RunMetrics } from "./metrics.js";
 import { buildPrompt, extractCandidate, type GenerateText, type Prompt } from "./prompt.js";
 import { rankDiagnostics } from "./ranking.js";
 
@@ -45,6 +46,7 @@ export interface RunAgentResult {
   readonly source: string;
   readonly diagnostics: readonly Diagnostic[];
   readonly history: readonly AgentAttempt[];
+  readonly metrics: RunMetrics;
 }
 
 export function isWritableTarget(target: string): boolean {
@@ -120,6 +122,7 @@ export async function runAgent(options: RunAgentOptions): Promise<RunAgentResult
         source,
         diagnostics: [],
         history,
+        metrics: computeRunMetrics({ status: "passed", attempts: attempt }),
       };
     }
   }
@@ -131,6 +134,7 @@ export async function runAgent(options: RunAgentOptions): Promise<RunAgentResult
     source,
     diagnostics,
     history,
+    metrics: computeRunMetrics({ status: "escalated", attempts: retries }),
   };
 }
 

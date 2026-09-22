@@ -10,6 +10,8 @@ export type {
   DiagnosticSuggestion,
 } from "./diagnostics.js";
 export { rankDiagnostics } from "./ranking.js";
+export { classifyOutcome, computeRunMetrics, summarizeKpis } from "./metrics.js";
+export type { AgentOutcome, KpiSummary, RunMetrics } from "./metrics.js";
 export {
   SYSTEM_PROMPT,
   buildPrompt,
