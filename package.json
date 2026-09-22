@@ -13,7 +13,13 @@
   ],
   "scripts": {
     "check:json": "xz check-json",
-    "build:shared": "xz build --shared"
+    "build:shared": "xz build --shared",
+    "build": "npm run build --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present"
+  },
+  "devDependencies": {
+    "@types/node": "^20.17.0",
+    "typescript": "^5.6.3"
   },
   "keywords": [
     "nextjs",

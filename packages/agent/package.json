@@ -1,0 +1,26 @@
+{
+  "name": "@xz-lang/agent",
+  "version": "0.1.0-draft",
+  "private": true,
+  "description": "Drive the LLM to write Xz and self-correct against xz check-json within a bounded retry budget.",
+  "license": "MIT",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
