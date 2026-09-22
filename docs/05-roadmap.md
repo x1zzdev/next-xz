@@ -42,7 +42,7 @@ intent set.
 
 Goal: a human approves a module in under 10 seconds.
 
-- [ ] Release the `next.xz/audit` React component package for the Next.js dev
+- [ ] Release the `@xz-lang/audit` React component package for the Next.js dev
   server (`/___audit`).
 - [ ] Build the AST-based side-effect extraction tool for audit badges.
 - [ ] Implement the `npx next.xz dev` unified CLI wrapper.

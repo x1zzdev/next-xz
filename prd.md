@@ -112,7 +112,7 @@ The component contracts are specified in [ARCHITECTURE.md](ARCHITECTURE.md).
 
 ## 5. Key feature requirements
 
-### 5.1 FFI and interoperability bridge (`next.xz/bridge`)
+### 5.1 FFI and interoperability bridge (`@xz-lang/bridge`)
 
 - **P0** — Automated TypeScript wrapper generator from `.xzint` interface
   files, mirroring the existing `xz pkg gen --lang python` flow with a
@@ -134,7 +134,7 @@ The component contracts are specified in [ARCHITECTURE.md](ARCHITECTURE.md).
   binding re-raises as a typed error. See
   [docs/01-bridge.md](docs/01-bridge.md).
 
-### 5.2 Agent self-correction pipeline (`next.xz/agent`)
+### 5.2 Agent self-correction pipeline (`@xz-lang/agent`)
 
 - **P0** — Automated loop: LLM prompt → code gen → `xz check-json` → context
   injection → auto-repair.
@@ -147,7 +147,7 @@ The component contracts are specified in [ARCHITECTURE.md](ARCHITECTURE.md).
 - **P1** — Refuse to let the agent edit raw TypeScript routing or infra files
   without an explicit developer flag (safety-first, see §8).
 
-### 5.3 Human audit interface (`next.xz/audit`)
+### 5.3 Human audit interface (`@xz-lang/audit`)
 
 - **P0** — Next.js dev-server overlay/route (`/___audit`) listing generated
   modules awaiting approval.
@@ -209,7 +209,7 @@ Targets are measured per release on the benchmark suite introduced in
 
 ### Phase 3 — Audit dashboard and developer experience (Q2 2027)
 
-- [ ] Release the `next.xz/audit` React component package for the Next.js dev
+- [ ] Release the `@xz-lang/audit` React component package for the Next.js dev
   server.
 - [ ] Build an AST-based side-effect extraction tool to render audit badges.
 - [ ] Implement the `npx next.xz dev` unified CLI wrapper.

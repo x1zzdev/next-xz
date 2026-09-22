@@ -15,7 +15,7 @@ assumes the Xz language surfaces described in the
                 │  import { payableTotal } from "@/xz/order"
                 │  (generated, typed binding)
 ┌───────────────▼─────────────────────────────────────────────────────┐
-│ Layer B — next.xz/bridge (generated + runtime)                      │
+│ Layer B — @xz-lang/bridge (generated + runtime)                     │
 │   binding generator · FFI loader · marshalling · error mapping      │
 └───────────────┬─────────────────────────────────────────────────────┘
                 │  C ABI symbols
@@ -25,12 +25,12 @@ assumes the Xz language surfaces described in the
 └─────────────────────────────────────────────────────────────────────┘
 
 ┌─────────────────────────────────────────────────────────────────────┐
-│ Layer D — next.xz/agent (dev-time, Node/Bun process)                │
+│ Layer D — @xz-lang/agent (dev-time, Node/Bun process)               │
 │   prompt builder · xz check-json driver · repair loop · retry budget│
 └───────────────┬─────────────────────────────────────────────────────┘
                 │  reads diagnostics, writes .xz
 ┌───────────────▼─────────────────────────────────────────────────────┐
-│ Layer E — next.xz/audit (dev-time Next.js route /___audit)          │
+│ Layer E — @xz-lang/audit (dev-time Next.js route /___audit)         │
 │   AST effect extraction · badge rendering · approval action         │
 └─────────────────────────────────────────────────────────────────────┘
 ```
@@ -40,7 +40,7 @@ tooling that never ship to production.
 
 ## 2. Component contracts
 
-### 2.1 `next.xz/bridge`
+### 2.1 `@xz-lang/bridge`
 
 Inputs: an `.xzint` interface file or a `.xz` source with `@export` functions.
 Outputs: a TypeScript module with typed functions and a loader.
@@ -67,7 +67,7 @@ Rules:
   the TypeScript binding maps its status/out-parameter back to a thrown typed
   error. See [docs/01-bridge.md](docs/01-bridge.md).
 
-### 2.2 `next.xz/agent`
+### 2.2 `@xz-lang/agent`
 
 Inputs: an intent specification (natural language + optional contract shell).
 Outputs: a `.xz` file, a diagnostic history, and a terminal status
@@ -98,7 +98,7 @@ Rules:
   explicit developer flag.
 - Every iteration is recorded so the audit view can show the path taken.
 
-### 2.3 `next.xz/audit`
+### 2.3 `@xz-lang/audit`
 
 Inputs: the approved-candidate `.xz` file and the diagnostic run that cleared
 it.

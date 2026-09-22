@@ -1,6 +1,6 @@
 # 03 — Human audit interface
 
-`next.xz/audit` renders AI-generated Xz modules as reviewable cards on the
+`@xz-lang/audit` renders AI-generated Xz modules as reviewable cards on the
 Next.js dev server, so a human can approve or reject in seconds.
 
 ## 1. Route

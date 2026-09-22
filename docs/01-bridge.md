@@ -1,6 +1,6 @@
 # 01 — FFI and TypeScript bridge
 
-`next.xz/bridge` turns an Xz shared library into a typed TypeScript module that
+`@xz-lang/bridge` turns an Xz shared library into a typed TypeScript module that
 a Next.js Server Action can import directly.
 
 ## 1. What the Xz side guarantees
@@ -41,7 +41,7 @@ liborder.xzint ──► xz pkg gen --lang python   (existing)
 - types every `extern`/`@export` function,
 - loads the shared object named by `--lib` (default: stem + platform suffix).
 
-Until `--lang ts` ships, `next.xz/bridge` provides a generator that parses the
+Until `--lang ts` ships, `@xz-lang/bridge` provides a generator that parses the
 same `.xzint` grammar and emits the same shape, so the CLI and the toolkit stay
 interchangeable.
 
@@ -141,7 +141,7 @@ functions.
 
 ## 8. Open questions
 
-- Should `--lang ts` live in the Xz CLI or in `next.xz/bridge`? (Current plan:
+- Should `--lang ts` live in the Xz CLI or in `@xz-lang/bridge`? (Current plan:
   the CLI, with the bridge generator as a compatible fallback.)
 - Zero-copy ownership rules for retained pointers need a contract syntax that
   `.xzint` cannot currently express.

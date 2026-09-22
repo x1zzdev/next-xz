@@ -1,6 +1,6 @@
 # 02 — Agent self-correction loop
 
-`next.xz/agent` drives an LLM to write `.xz` code and repairs compiler errors
+`@xz-lang/agent` drives an LLM to write `.xz` code and repairs compiler errors
 without human intervention, within a bounded budget.
 
 ## 1. Why the loop works
