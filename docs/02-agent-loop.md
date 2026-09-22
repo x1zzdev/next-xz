@@ -131,3 +131,23 @@ and only depends on a `generate(prompt) -> text` interface.
 The loop reports the KPIs from the PRD: first-pass rate, self-correction rate,
 and escalation rate. These are recorded per run so a regression in prompt
 quality is visible.
+
+Each run carries one `RunMetrics` record, classified from its outcome:
+
+| Outcome | Condition |
+|---|---|
+| `first-pass` | `status == "passed"` and `attempts == 1`. |
+| `self-corrected` | `status == "passed"` after at least one repair. |
+| `escalated` | The retry budget was exhausted. |
+
+Rates are defined once, over a set of runs:
+
+- `firstPassRate` = `firstPass / runs`.
+- `escalationRate` = `escalated / runs`.
+- `selfCorrectionRate` = `selfCorrected / (selfCorrected + escalated)` — the
+  share of initially-failing runs the agent recovered. `0` when no run failed
+  first-pass. This denominator matches the PRD target (≥ 85%): a loop that
+  passes everything first-pass is not penalized for not self-correcting.
+
+`runAgent` returns `RunMetrics` on each `RunAgentResult`; `summarizeKpis`
+aggregates a set of records into the three rates.
