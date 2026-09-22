@@ -120,8 +120,13 @@ struct; the binding encodes on call and decodes on return.
 
 P1 zero-copy: for `Bytes` and `@cstruct` payloads, pass a `Uint8Array`'s
 backing buffer directly and pin it for the duration of the call, avoiding a
-copy. Ownership rules must be explicit: the Xz side may not retain a pointer
-past the call unless the contract says so.
+copy. Ownership is explicit in the interface: a parameter is borrowed by
+default — the callee may not retain the pointer past the call — and an
+`extern func` parameter marked `transfer` moves ownership to the callee
+([Xz docs/10](https://github.com/x1zzdev/Xz/blob/main/docs/10-ffi-interop.md)).
+The generated binding pins a borrowed buffer for the call and refuses a
+`transfer` parameter with a hard error until it can emit the ownership handoff;
+it never passes a borrowed buffer to a callee that may retain it.
 
 ### 4.3 `@cstruct`
 
@@ -212,9 +217,9 @@ export function bind(backend: FfiBackend): Binding {
 
 The current generator emits bindings only for signatures it can marshal
 faithfully: scalars (`Bool`, `Int`, `usize`, `Float`, `Char`), `Ptr`, and
-`@cstruct` records of those. `Str`/`Bytes` encode/decode and `mut` out-parameters
-(the `Result` contract wrapper, §5) are hard errors, not lossy output, until the
-generator emits their marshalling.
+`@cstruct` records of those. `Str`/`Bytes` encode/decode, `mut` out-parameters
+(the `Result` contract wrapper, §5), and `transfer` ownership handoff (§4.2)
+are hard errors, not lossy output, until the generator emits their marshalling.
 
 ## 7. Performance budget
 
@@ -227,6 +232,10 @@ functions.
 
 - Where the TypeScript generator lives is settled (§2.1): in
   `@xz-lang/bridge`, not the Xz CLI.
-- Zero-copy ownership rules for retained pointers need a contract syntax that
-  `.xzint` cannot currently express.
+- Zero-copy ownership rules for retained pointers are expressed by the
+  `transfer` parameter modifier on `extern func` ([Xz
+  docs/10](https://github.com/x1zzdev/Xz/blob/main/docs/10-ffi-interop.md)).
+  The binding enforces the borrow default today and rejects `transfer` until it
+  can emit the ownership handoff (§4.2); passing the buffer without a copy is
+  still open.
 - Edge runtime requires Wasm, which changes the loading story entirely.
