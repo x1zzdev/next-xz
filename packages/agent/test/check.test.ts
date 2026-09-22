@@ -3,6 +3,7 @@ import { test } from "node:test";
 
 import {
   XzCheckError,
+  misconfiguredExecutableHint,
   resolveExecutable,
   runCheckJson,
   type ProcessRunner,
@@ -74,6 +75,33 @@ test("raises XzCheckError when check-json does not emit a diagnostic array", asy
       error.file === "bad.xz" &&
       error.exitCode === 1 &&
       error.stderr === "boom",
+  );
+});
+
+test("hints at the XZ Utils collision when the wrong xz answers check-json", async () => {
+  const { runner } = fakeRunner(
+    "",
+    1,
+    "xz: check-json: No such file or directory\nxz: order.xz: File already has '.xz' suffix, skipping",
+  );
+  await assert.rejects(
+    runCheckJson({ file: "order.xz", runner }),
+    (error: unknown) =>
+      error instanceof XzCheckError &&
+      error.hint !== undefined &&
+      error.hint.includes("XZ Utils") &&
+      error.message.includes("set XZ_CLI"),
+  );
+});
+
+test("no XZ Utils hint when the output is not from XZ Utils", () => {
+  assert.equal(
+    misconfiguredExecutableHint({ stdout: "error: unexpected character @", stderr: "", exitCode: 1 }),
+    undefined,
+  );
+  assert.equal(
+    misconfiguredExecutableHint({ stdout: "", stderr: "xz: order.xz: Bad magic", exitCode: 1 }),
+    "the resolved 'xz' looks like XZ Utils, not the Xz language CLI; set XZ_CLI to the Xz CLI binary (e.g. xz-cli/target/release/xz) or pass an explicit executable",
   );
 });
 

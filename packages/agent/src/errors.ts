@@ -30,10 +30,19 @@ export class XzCheckError extends Error {
   readonly exitCode: number;
   readonly stdout: string;
   readonly stderr: string;
+  readonly hint: string | undefined;
 
-  constructor(executable: string, file: string, result: CheckProcessResult, reason: string) {
+  constructor(
+    executable: string,
+    file: string,
+    result: CheckProcessResult,
+    reason: string,
+    hint?: string,
+  ) {
     super(
-      `'${executable} check-json ${file}' did not emit a diagnostic array (${reason}); exit ${result.exitCode}`,
+      `'${executable} check-json ${file}' did not emit a diagnostic array (${reason}); exit ${result.exitCode}${
+        hint === undefined ? "" : `; ${hint}`
+      }`,
     );
     this.name = "XzCheckError";
     this.executable = executable;
@@ -41,5 +50,6 @@ export class XzCheckError extends Error {
     this.exitCode = result.exitCode;
     this.stdout = result.stdout;
     this.stderr = result.stderr;
+    this.hint = hint;
   }
 }

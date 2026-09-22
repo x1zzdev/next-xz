@@ -20,7 +20,7 @@ export {
   summarizeChange,
 } from "./prompt.js";
 export type { GenerateText, Prompt, PromptContext } from "./prompt.js";
-export { resolveExecutable, runCheckJson, spawnRunner } from "./check.js";
+export { misconfiguredExecutableHint, resolveExecutable, runCheckJson, spawnRunner } from "./check.js";
 export type { CheckJsonOptions, CheckJsonResult, ProcessRunner, ProcessRunnerOptions } from "./check.js";
 export { DEFAULT_RETRIES, hashPrompt, isWritableTarget, runAgent } from "./run.js";
 export type { AgentAttempt, AgentStatus, FileWriter, RunAgentOptions, RunAgentResult } from "./run.js";

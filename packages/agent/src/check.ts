@@ -35,6 +35,16 @@ export function resolveExecutable(explicit?: string): string {
   return explicit ?? process.env["XZ_CLI"] ?? "xz";
 }
 
+const XZ_UTILS_MARKERS: readonly RegExp[] = [/^xz:\s/m, /XZ Utils/];
+
+export function misconfiguredExecutableHint(result: CheckProcessResult): string | undefined {
+  const output = `${result.stdout}\n${result.stderr}`;
+  if (!XZ_UTILS_MARKERS.some((marker) => marker.test(output))) {
+    return undefined;
+  }
+  return "the resolved 'xz' looks like XZ Utils, not the Xz language CLI; set XZ_CLI to the Xz CLI binary (e.g. xz-cli/target/release/xz) or pass an explicit executable";
+}
+
 export async function runCheckJson(options: CheckJsonOptions): Promise<CheckJsonResult> {
   const executable = resolveExecutable(options.executable);
   const args = [
@@ -50,7 +60,8 @@ export async function runCheckJson(options: CheckJsonOptions): Promise<CheckJson
     diagnostics = parseDiagnostics(result.stdout);
   } catch (error) {
     if (error instanceof DiagnosticParseError) {
-      throw new XzCheckError(executable, options.file, result, error.message);
+      const hint = misconfiguredExecutableHint(result);
+      throw new XzCheckError(executable, options.file, result, error.message, hint);
     }
     throw error;
   }
