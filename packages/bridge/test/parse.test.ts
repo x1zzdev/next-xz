@@ -44,6 +44,13 @@ test("parses mut params", () => {
   assert.deepEqual(iface.funcs[0]?.params[1]?.type, { kind: "named", name: "Float" });
 });
 
+test("parses transfer params", () => {
+  const iface = parseInterface("extern func write(transfer frame: Bytes) -> Int\n");
+  assert.equal(iface.funcs[0]?.params[0]?.transfer, true);
+  assert.equal(iface.funcs[0]?.params[0]?.mutable, false);
+  assert.deepEqual(iface.funcs[0]?.params[0]?.type, { kind: "named", name: "Bytes" });
+});
+
 test("parses generic type arguments as non-C-representable shape", () => {
   const iface = parseInterface("extern func f(x: Result[Int, Int]) -> Int\n");
   assert.deepEqual(iface.funcs[0]?.params[0]?.type, {

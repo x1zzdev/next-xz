@@ -94,13 +94,17 @@ class Parser {
 
   private parseParam(): Param {
     let mutable = false;
+    let transfer = false;
     if (this.atIdent("mut")) {
       this.advance();
       mutable = true;
+    } else if (this.atIdent("transfer")) {
+      this.advance();
+      transfer = true;
     }
     const name = this.expectIdent();
     this.expect("colon");
-    return { name, mutable, type: this.parseType() };
+    return { name, mutable, transfer, type: this.parseType() };
   }
 
   private parseType(): XzType {

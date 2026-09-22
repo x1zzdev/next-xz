@@ -58,6 +58,11 @@ function assertGeneratable(
   names: ReadonlySet<string>,
 ): void {
   for (const param of func.params) {
+    if (param.transfer) {
+      throw new BridgeDefinitionError(
+        `symbol '${func.name}': parameter '${param.name}' is declared 'transfer'; the generated binding borrows buffers for the call only and cannot hand off ownership (docs/01 section 4.2)`,
+      );
+    }
     if (param.mutable) {
       throw new BridgeDefinitionError(
         `symbol '${func.name}': mutable parameter '${param.name}' has no generated binding yet; the contract wrapper pattern (docs/01 section 5) is not emitted from .xzint`,

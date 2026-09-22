@@ -56,6 +56,15 @@ test("rejects a mutable parameter until the contract wrapper is emitted", () => 
   );
 });
 
+test("rejects a transfer parameter until ownership handoff is emitted", () => {
+  const iface = parseInterface("extern func write(transfer frame: Bytes) -> Int\n");
+  assert.throws(
+    () => generateBinding(iface, options),
+    (error: unknown) =>
+      error instanceof BridgeDefinitionError && error.message.includes("transfer"),
+  );
+});
+
 test("rejects a Str field inside a @cstruct record", () => {
   const iface = parseInterface("@cstruct record Name {\n    text: Str\n}\nextern func id(n: Name) -> Name\n");
   assert.throws(() => generateBinding(iface, options), BridgeDefinitionError);

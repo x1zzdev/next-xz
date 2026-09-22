@@ -25,6 +25,7 @@ export type XzType = NamedType | GenericType;
 export interface Param {
   readonly name: string;
   readonly mutable: boolean;
+  readonly transfer: boolean;
   readonly type: XzType;
 }
 
