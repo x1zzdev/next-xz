@@ -39,3 +39,10 @@ export type { LoadOptions, LoadedLibrary } from "./loader/load.js";
 export type { FfiBackend, FfiLibrary } from "./loader/ffi-backend.js";
 export { BunFfiBackend, loadBunBackend, loadBunLibrary } from "./loader/bun.js";
 export type { BunFfiFunction, BunFfiLibrary, BunFfiModule } from "./loader/bun.js";
+export { KoffiBackend, loadKoffiBackend, loadNodeLibrary } from "./loader/node.js";
+export type {
+  KoffiFunction,
+  KoffiLibrary,
+  KoffiModule,
+  KoffiSignature,
+} from "./loader/node.js";

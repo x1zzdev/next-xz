@@ -82,6 +82,11 @@ struct passed by value. A symbol whose signature contains `Str`, `Bytes`, or a
 marshalling slice defines a pointer-based path. The loader never degrades the
 signature silently.
 
+The Node loader over `koffi` can declare by-value structs, but the bridge keeps
+one canonical call shape across runtimes: struct-valued signatures are deferred
+to the marshalling slice there too, and fail at load time with the same
+`BridgeRuntimeError`.
+
 ## 4. Marshalling
 
 ### 4.1 Scalars
