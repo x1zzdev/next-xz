@@ -8,6 +8,16 @@ export class DiagnosticParseError extends Error {
   }
 }
 
+export class AgentScopeError extends Error {
+  readonly target: string;
+
+  constructor(target: string) {
+    super(`refusing to write '${target}': the agent may only edit .xz and .xzint files`);
+    this.name = "AgentScopeError";
+    this.target = target;
+  }
+}
+
 export interface CheckProcessResult {
   readonly stdout: string;
   readonly stderr: string;
