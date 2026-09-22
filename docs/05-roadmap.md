@@ -18,8 +18,10 @@ Goal: prove the call path works end to end and is fast enough.
   - Version pinning and symbol checks.
 - [ ] Implement the TypeScript binding generator over `.xzint` (fallback until
   `xz pkg gen --lang ts` ships).
-- [ ] Create a benchmark suite comparing native TS logic vs. Xz FFI execution
-  speed and latency.
+- [x] Create a benchmark suite comparing native TS logic vs. Xz FFI execution
+  speed and latency. *(`@xz-lang/bridge` measures per-call latency/throughput and
+  checks the 0.5 ms overhead budget; real FFI numbers await koffi + a compiled
+  `.so`.)*
 
 Exit criteria: a Server Action calls an Xz `@export` function through the
 generated binding, with measured overhead under 0.5 ms.

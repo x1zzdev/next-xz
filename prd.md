@@ -198,7 +198,9 @@ Targets are measured per release on the benchmark suite introduced in
 
 - [x] Validate C ABI shared-library compilation (`xz build --shared`). *(Done in Xz.)*
 - [ ] Implement Node.js/Bun FFI bindings for Next.js Server Actions.
-- [ ] Create a benchmark suite comparing native TS logic vs. Xz FFI execution.
+- [x] Create a benchmark suite comparing native TS logic vs. Xz FFI execution.
+  *(Latency/throughput harness in `@xz-lang/bridge`; real FFI numbers await
+  koffi + a compiled `.so`.)*
 
 ### Phase 2 — Agent and self-correction engine (Q1 2027)
 
