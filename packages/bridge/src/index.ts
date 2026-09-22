@@ -13,3 +13,13 @@ export type {
   PrimitiveType,
   XzType,
 } from "./xzint/ast.js";
+export {
+  PRIMITIVE_MAP,
+  NON_C_REPRESENTABLE,
+  cstructNames,
+  isCRepresentable,
+  isPrimitive,
+  mapTypeToTs,
+  renderXzType,
+} from "./type-map.js";
+export type { PrimitiveMapping, PrimitiveName, TypePosition } from "./type-map.js";
