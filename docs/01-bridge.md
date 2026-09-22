@@ -181,12 +181,12 @@ export const manifest: LibraryManifest = {
   },
 };
 
-export interface orderBinding {
+export interface Binding {
   payableTotal(subtotal: number, taxRate: number): number;
   close(): void;
 }
 
-export function bind(backend: FfiBackend): orderBinding {
+export function bind(backend: FfiBackend): Binding {
   const loaded = loadLibrary(manifest, { expectedXzVersion: manifest.xzVersion, backend });
   const symbols = loaded.symbols as Readonly<Record<string, (...args: unknown[]) => unknown>>;
   return {

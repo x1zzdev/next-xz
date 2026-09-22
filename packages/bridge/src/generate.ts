@@ -45,9 +45,9 @@ export function generateBinding(iface: Interface, options: GenerateOptions): str
 
   lines.push(...emitManifest(manifest));
   lines.push("");
-  lines.push(...emitBindingInterface(options.name, iface, names));
+  lines.push(...emitBindingInterface(iface, names));
   lines.push("");
-  lines.push(...emitBindFunction(options.name, iface));
+  lines.push(...emitBindFunction(iface));
   lines.push("");
   return lines.join("\n");
 }
@@ -138,12 +138,8 @@ function emitFfiType(type: FfiType): string {
   return `{ kind: "struct", name: ${JSON.stringify(type.name)}, fields: [${fields}] }`;
 }
 
-function emitBindingInterface(
-  name: string,
-  iface: Interface,
-  names: ReadonlySet<string>,
-): string[] {
-  const lines = [`export interface ${name}Binding {`];
+function emitBindingInterface(iface: Interface, names: ReadonlySet<string>): string[] {
+  const lines = ["export interface Binding {"];
   for (const func of iface.funcs) {
     const params = func.params
       .map((param) => `${param.name}: ${mapTypeToTs(param.type, names, "param")}`)
@@ -155,8 +151,8 @@ function emitBindingInterface(
   return lines;
 }
 
-function emitBindFunction(name: string, iface: Interface): string[] {
-  const lines = [`export function bind(backend: FfiBackend): ${name}Binding {`];
+function emitBindFunction(iface: Interface): string[] {
+  const lines = ["export function bind(backend: FfiBackend): Binding {"];
   lines.push(
     "  const loaded = loadLibrary(manifest, { expectedXzVersion: manifest.xzVersion, backend });",
   );
