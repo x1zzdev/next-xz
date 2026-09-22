@@ -39,7 +39,9 @@ liborder.xzint ──► xz pkg gen --lang python   (existing)
 - emits a module named after the interface stem,
 - declares each `@cstruct` as a TypeScript interface with matching field order,
 - types every `extern`/`@export` function,
-- loads the shared object named by `--lib` (default: stem + platform suffix).
+- records the shared object named by `--lib` (default: stem + platform suffix)
+  in a manifest and emits a `bind(backend)` factory (§6), so the same module
+  loads on Bun or Node.
 
 Until `--lang ts` ships, `@xz-lang/bridge` provides a generator that parses the
 same `.xzint` grammar and emits the same shape, so the CLI and the toolkit stay
@@ -158,14 +160,49 @@ after an error.
 
 ## 6. Generated module shape
 
+The generator emits one module per interface, named after its stem. It declares
+each `@cstruct` as a TypeScript interface, records the manifest, and exposes a
+`bind(backend)` factory that loads the shared object through the given `FfiBackend`
+and returns the typed facade. Binding is explicit so the runtime can inject the
+Bun or Node backend, and the backend is the only thing that varies per platform.
+
 ```ts
 // src/xz/order.ts (generated — do not edit)
-export interface Color { r: bigint; g: bigint; b: bigint; a: bigint }
+import { loadLibrary, type FfiBackend, type LibraryManifest } from "@xz-lang/bridge";
 
-export function payableTotal(subtotal: number, taxRate: number): number;
-// throws XzContractError; the status/out-parameter mapping lives in the wrapper
-export function parseAmount(text: string): number;
+export interface Color { r: number; g: number; b: number; a: number }
+
+export const manifest: LibraryManifest = {
+  name: "order",
+  path: ".next-xz/liborder.so",
+  xzVersion: "0.1.0",
+  symbols: {
+    "payableTotal": { args: ["int64", "int64"], returns: "int64" },
+  },
+};
+
+export interface orderBinding {
+  payableTotal(subtotal: number, taxRate: number): number;
+  close(): void;
+}
+
+export function bind(backend: FfiBackend): orderBinding {
+  const loaded = loadLibrary(manifest, { expectedXzVersion: manifest.xzVersion, backend });
+  const symbols = loaded.symbols as Readonly<Record<string, (...args: unknown[]) => unknown>>;
+  return {
+    payableTotal(subtotal, taxRate) {
+      return symbols["payableTotal"]!(subtotal, taxRate);
+    },
+    close: () => loaded.close(),
+  };
+}
 ```
+
+The current generator emits bindings only for signatures it can marshal
+faithfully: scalars (`Bool`, `Int`, `usize`, `Float`, `Char`), `Ptr`, and
+`@cstruct` records of those. `Str`/`Bytes` encode/decode and `mut` out-parameters
+(the `Result` contract wrapper, §5) are hard errors, not lossy output, until the
+generator emits their marshalling.
 
 ## 7. Performance budget
 
