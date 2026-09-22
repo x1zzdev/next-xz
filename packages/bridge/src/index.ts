@@ -9,6 +9,8 @@ export {
 } from "./errors.js";
 export { runContracted } from "./contract.js";
 export type { ContractDescriptor } from "./contract.js";
+export { decodeBytes, decodeStr, encodeBytes, encodeStr } from "./marshalling.js";
+export type { XzPointerValue } from "./marshalling.js";
 export { generateBinding } from "./generate.js";
 export type { GenerateOptions } from "./generate.js";
 export { parseInterface } from "./xzint/parse.js";
