@@ -116,17 +116,22 @@ The encode/decode of a JavaScript `string` or `Uint8Array` into an `XzStr`/
 ### 4.2 `Str` / `Bytes`
 
 Default (P0): encode/decode. `Str` crosses as UTF-8 bytes into an `XzStr`
-struct; the binding encodes on call and decodes on return.
+struct; the binding encodes on call and decodes on return. `Bytes` crosses as
+an `XzBytes` struct wrapping the caller's `Uint8Array` view.
 
-P1 zero-copy: for `Bytes` and `@cstruct` payloads, pass a `Uint8Array`'s
-backing buffer directly and pin it for the duration of the call, avoiding a
-copy. Ownership is explicit in the interface: a parameter is borrowed by
-default — the callee may not retain the pointer past the call — and an
-`extern func` parameter marked `transfer` moves ownership to the callee
+Ownership is explicit in the interface: a parameter is borrowed by default —
+the callee may not retain the pointer past the call — and an `extern func`
+parameter marked `transfer` moves ownership to the callee
 ([Xz docs/10](https://github.com/x1zzdev/Xz/blob/main/docs/10-ffi-interop.md)).
-The generated binding pins a borrowed buffer for the call and refuses a
-`transfer` parameter with a hard error until it can emit the ownership handoff;
-it never passes a borrowed buffer to a callee that may retain it.
+The generated binding wraps the view for the call and, for `transfer`, retains
+the backing buffer on the binding until `close()`: the buffer is never copied,
+and it stays alive as long as the callee may hold the pointer. It never passes
+a borrowed buffer to a callee that may retain it, and it rejects a `transfer`
+of a non-buffer type.
+
+`Str`/`Bytes` are marshalled at top level only. A `@cstruct` field of either
+type, a `Ptr` or handle record handed off with `transfer`, and by-value payloads
+remain hard errors until the generator emits their marshalling.
 
 ### 4.3 `@cstruct`
 
@@ -216,10 +221,12 @@ export function bind(backend: FfiBackend): Binding {
 ```
 
 The current generator emits bindings only for signatures it can marshal
-faithfully: scalars (`Bool`, `Int`, `usize`, `Float`, `Char`), `Ptr`, and
-`@cstruct` records of those. `Str`/`Bytes` encode/decode, `mut` out-parameters
-(the `Result` contract wrapper, §5), and `transfer` ownership handoff (§4.2)
-are hard errors, not lossy output, until the generator emits their marshalling.
+faithfully: scalars (`Bool`, `Int`, `usize`, `Float`, `Char`), `Ptr`,
+`@cstruct` records of those, and top-level `Str`/`Bytes` (encode/decode, with
+`transfer` retention per §4.2). `mut` out-parameters (the `Result` contract
+wrapper, §5), `Str`/`Bytes` as `@cstruct` fields, and `transfer` of `Ptr` or a
+handle record are hard errors, not lossy output, until the generator emits
+their marshalling.
 
 ## 7. Performance budget
 
@@ -235,7 +242,8 @@ functions.
 - Zero-copy ownership rules for retained pointers are expressed by the
   `transfer` parameter modifier on `extern func` ([Xz
   docs/10](https://github.com/x1zzdev/Xz/blob/main/docs/10-ffi-interop.md)).
-  The binding enforces the borrow default today and rejects `transfer` until it
-  can emit the ownership handoff (§4.2); passing the buffer without a copy is
-  still open.
+  The binding now emits the handoff for top-level `Str`/`Bytes` by retaining the
+  caller's buffer until `close()` (§4.2). Whether an FFI backend exposes a
+  returned struct field as a byte view (rather than an opaque pointer) is
+  unverified without a real `.so`; `koffi`/Bun smoke tests are outstanding.
 - Edge runtime requires Wasm, which changes the loading story entirely.
