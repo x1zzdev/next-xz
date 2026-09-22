@@ -13,8 +13,8 @@
     "examples"
   ],
   "scripts": {
-    "check:json": "xz check-json",
-    "build:shared": "xz build --shared",
+    "check:json": "${XZ_CLI:-xz} check-json",
+    "build:shared": "${XZ_CLI:-xz} build --shared",
     "build": "npm run build --workspaces --if-present",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "test": "npm run test --workspaces --if-present"

@@ -103,6 +103,24 @@ flag widens the scope.
 | No auto-commit | The agent never commits; approval is a human action in the audit UI. |
 | Audit trail | Every attempt (prompt hash, source, diagnostics) is recorded for review. |
 
+### Executable resolution
+
+`xz check-json` is the Xz *language* CLI, not XZ Utils. On many systems
+`/usr/bin/xz` is XZ Utils, which shares the `xz` name and fails `check-json`
+confusingly (it treats the argument as an archive path). The runner resolves
+the binary in exactly one order:
+
+1. an explicit `executable` option on `runCheckJson` / `runAgent`,
+2. the `XZ_CLI` environment variable,
+3. `xz` on `PATH`.
+
+Set `XZ_CLI` to the Xz CLI build (for a source checkout,
+`xz-cli/target/release/xz`) whenever `xz` on `PATH` is XZ Utils. The root
+`check:json` and `build:shared` scripts forward `XZ_CLI` the same way. When
+`check-json` does not emit a diagnostic array and the output carries XZ Utils
+markers (`xz: ...` or `XZ Utils`), the runner raises `XzCheckError` with a hint
+naming the collision. There is no second fallback binary.
+
 ## 7. Library surface (planned)
 
 ```ts
