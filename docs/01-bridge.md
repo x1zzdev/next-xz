@@ -1,0 +1,148 @@
+# 01 — FFI and TypeScript bridge
+
+`next.xz/bridge` turns an Xz shared library into a typed TypeScript module that
+a Next.js Server Action can import directly.
+
+## 1. What the Xz side guarantees
+
+From the Xz FFI spec:
+
+- `xz build --shared <file.xz>` emits a shared object plus a C header for the
+  functions marked `@export`. Everything else keeps internal linkage.
+- An exported signature must be C-representable end to end: `Bool`, `Int`,
+  `usize`, `Float`, `Char`, `Str`, `Bytes`, `Ptr`, or a `@cstruct record`,
+  with `Unit` allowed only as the return. A `Result`, `Option`, `List`, `Map`,
+  `Set`, `Chan`, `enum`, or plain `record` has no C declaration and is
+  rejected.
+- `Str`/`Bytes` cross as two-field structs (pointer + length). `mut`
+  parameters map to `T*` (C in/out).
+- The generated header is an honest, complete description of the ABI.
+
+The bridge consumes exactly this surface. It never reads Xz source to guess a
+layout; it reads the generated header or the `.xzint` interface.
+
+## 2. Interface-first workflow
+
+Preferred: declare the boundary in a `.xzint` file and generate both sides from
+it.
+
+```
+liborder.xzint ──► xz pkg gen --lang python   (existing)
+              └──► xz pkg gen --lang ts        (planned)
+                        │
+                        ▼
+                  src/xz/liborder.ts
+```
+
+`xz pkg gen --lang ts` mirrors the existing `--lang python` target:
+
+- emits a module named after the interface stem,
+- declares each `@cstruct` as a TypeScript interface with matching field order,
+- types every `extern`/`@export` function,
+- loads the shared object named by `--lib` (default: stem + platform suffix).
+
+Until `--lang ts` ships, `next.xz/bridge` provides a generator that parses the
+same `.xzint` grammar and emits the same shape, so the CLI and the toolkit stay
+interchangeable.
+
+## 3. Loading the library
+
+| Runtime | Mechanism | Notes |
+|---|---|---|
+| Bun | `bun:ffi` `dlopen` + `FFIType` | Fastest path; native in the runtime. |
+| Node | `koffi` (default) or an N-API addon | `koffi` is the current practical FFI for Node; the addon path is for hot functions. |
+| Vercel Edge | Wasm (Phase 4) | Native `.so` is not available on the Edge runtime. |
+
+The loader:
+
+1. resolves the shared object path from the generated metadata,
+2. verifies the Xz compiler version recorded in the metadata,
+3. registers each symbol with its C signature,
+4. returns a typed facade.
+
+A version mismatch throws `BridgeVersionError`. A missing symbol throws
+`BridgeSymbolError`. Both are actionable, not silent.
+
+## 4. Marshalling
+
+### 4.1 Scalars
+
+`Bool` → `boolean`, `Int`/`usize` → `number` (with `bigint` for values beyond
+2^53), `Float` → `number`, `Char` → single-character `string`.
+
+### 4.2 `Str` / `Bytes`
+
+Default (P0): encode/decode. `Str` crosses as UTF-8 bytes into an `XzStr`
+struct; the binding encodes on call and decodes on return.
+
+P1 zero-copy: for `Bytes` and `@cstruct` payloads, pass a `Uint8Array`'s
+backing buffer directly and pin it for the duration of the call, avoiding a
+copy. Ownership rules must be explicit: the Xz side may not retain a pointer
+past the call unless the contract says so.
+
+### 4.3 `@cstruct`
+
+Generated as a TypeScript interface with the same field order and alignment
+semantics. Nested `@cstruct` records nest as objects.
+
+### 4.4 Handles
+
+A `@cstruct` containing a `Ptr` is a handle type: never copied, handed off only
+with `transfer`. The TypeScript binding exposes it as an opaque object whose
+methods route back into the library; it is not a plain value object.
+
+## 5. The `Result` problem
+
+A C ABI export cannot carry a `Result`. Three sanctioned patterns, in order of
+preference:
+
+1. **Contracted wrapper (default).** Write a thin `@export` Xz function whose
+   signature is C-representable and whose contract documents the mapping, e.g.
+   an out-parameter `mut` status plus a value. The binding re-raises a typed
+   error.
+
+   ```
+   /// @intent  Parses an amount; writes the value and returns a status code.
+   /// @effects none
+   @export func parse_amount(text: Str, mut out: Float) -> Int
+       post result >= 0
+   {
+       ...   // 0 = ok, >0 = error code
+   }
+   ```
+
+2. **Status + last-error accessor.** A library-scoped error slot read by a
+   companion `@export` function.
+
+3. **CPython-style shim (future).** A generated shim that maps `Result` to a
+   language-native exception. This is the long-term clean path for Node too,
+   via an N-API addon.
+
+The bridge always surfaces the mapping in the generated TypeScript signature,
+so a caller cannot forget to check it.
+
+## 6. Generated module shape
+
+```ts
+// src/xz/order.ts (generated — do not edit)
+export interface Color { r: bigint; g: bigint; b: bigint; a: bigint }
+
+export function payableTotal(subtotal: number, taxRate: number): number;
+export function parseAmount(text: string): { ok: true; value: number }
+  | { ok: false; code: number };
+```
+
+## 7. Performance budget
+
+FFI overhead target: **< 0.5 ms** per call, excluding the body. This rules out
+per-call `dlopen`, per-call marshalling of large buffers, and per-call JSON.
+The benchmark suite in Phase 1 measures native TS vs. Xz FFI for a fixed set of
+functions.
+
+## 8. Open questions
+
+- Should `--lang ts` live in the Xz CLI or in `next.xz/bridge`? (Current plan:
+  the CLI, with the bridge generator as a compatible fallback.)
+- Zero-copy ownership rules for retained pointers need a contract syntax that
+  `.xzint` cannot currently express.
+- Edge runtime requires Wasm, which changes the loading story entirely.

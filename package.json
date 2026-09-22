@@ -1,0 +1,26 @@
+{
+  "name": "next-xz",
+  "version": "0.1.0-draft",
+  "private": true,
+  "description": "Next.js + Xz orchestration toolkit: AI-written, human-reviewed backend logic.",
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "check:json": "xz check-json",
+    "build:shared": "xz build --shared"
+  },
+  "keywords": [
+    "nextjs",
+    "xz",
+    "ffi",
+    "agent",
+    "audit",
+    "ai-written-human-reviewed"
+  ]
+}
