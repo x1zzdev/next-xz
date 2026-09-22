@@ -61,3 +61,27 @@ export class BridgeRuntimeError extends Error {
     this.name = "BridgeRuntimeError";
   }
 }
+
+export class XzContractError extends Error {
+  readonly library: string;
+  readonly symbol: string;
+  readonly code: number;
+  readonly errorName?: string;
+
+  constructor(
+    library: string,
+    symbol: string,
+    code: number,
+    errorName?: string,
+  ) {
+    const named = errorName === undefined ? "" : ` (${errorName})`;
+    super(`Contracted call '${symbol}' in '${library}' failed with status ${code}${named}`);
+    this.name = "XzContractError";
+    this.library = library;
+    this.symbol = symbol;
+    this.code = code;
+    if (errorName !== undefined) {
+      this.errorName = errorName;
+    }
+  }
+}

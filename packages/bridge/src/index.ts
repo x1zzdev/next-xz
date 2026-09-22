@@ -4,8 +4,11 @@ export {
   BridgeSymbolError,
   BridgeVersionError,
   NotCRepresentableError,
+  XzContractError,
   XzintParseError,
 } from "./errors.js";
+export { runContracted } from "./contract.js";
+export type { ContractDescriptor } from "./contract.js";
 export { parseInterface } from "./xzint/parse.js";
 export { tokenize } from "./xzint/token.js";
 export type { Token, TokenKind } from "./xzint/token.js";
