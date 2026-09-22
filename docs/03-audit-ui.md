@@ -14,6 +14,12 @@ In production the route is absent; audit is a development-only surface.
 /___audit/[module]     → one module: badges, contract, diff, actions
 ```
 
+The package exposes the route as framework-agnostic handlers bound to an
+`AuditRegistry`: the list answers the modules awaiting a decision
+(`pending`/`blocked`) as JSON, and the module handler answers one card or 404.
+A Next.js App Router route re-exports them; React rendering is a separate
+deliverable.
+
 ## 2. The Audit Card
 
 Each card answers the four reviewer questions directly:
