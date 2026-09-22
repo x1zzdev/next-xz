@@ -39,6 +39,20 @@ export { mapXzTypeToFfi } from "./ffi/types.js";
 export type { FfiScalar, FfiStruct, FfiStructField, FfiType } from "./ffi/types.js";
 export { manifestFromInterface } from "./ffi/manifest.js";
 export type { LibraryManifest, ManifestInput, SymbolDefinition } from "./ffi/manifest.js";
+export { measure, percentile, systemClock } from "./bench/stats.js";
+export type { Clock, LatencyStats, MeasureOptions } from "./bench/stats.js";
+export {
+  DEFAULT_FFI_BUDGET_MS,
+  compareCallOverhead,
+  formatBenchmarkReport,
+  runBenchmarks,
+} from "./bench/compare.js";
+export type {
+  BenchmarkCase,
+  BenchmarkComparison,
+  BenchmarkSuiteResult,
+  CompareOptions,
+} from "./bench/compare.js";
 export { loadLibrary } from "./loader/load.js";
 export type { LoadOptions, LoadedLibrary } from "./loader/load.js";
 export type { FfiBackend, FfiLibrary } from "./loader/ffi-backend.js";
