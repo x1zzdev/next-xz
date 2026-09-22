@@ -9,6 +9,8 @@ export {
 } from "./errors.js";
 export { runContracted } from "./contract.js";
 export type { ContractDescriptor } from "./contract.js";
+export { generateBinding } from "./generate.js";
+export type { GenerateOptions } from "./generate.js";
 export { parseInterface } from "./xzint/parse.js";
 export { tokenize } from "./xzint/token.js";
 export type { Token, TokenKind } from "./xzint/token.js";
