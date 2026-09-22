@@ -148,7 +148,13 @@ preference:
    via an N-API addon.
 
 The bridge always surfaces the mapping in the generated TypeScript signature,
-so a caller cannot forget to check it.
+so a caller cannot forget to check it. The runtime primitives are
+`runContracted(descriptor, invoke, readValue)` and the `XzContractError` it
+throws: `invoke` performs the raw call and returns the status code, `readValue`
+recovers the out-parameter, and a status other than `descriptor.okCode` raises
+with the declared error name (or the bare numeric code when none is declared).
+A reader that runs only on the ok path means the out value is never trusted
+after an error.
 
 ## 6. Generated module shape
 
@@ -157,8 +163,8 @@ so a caller cannot forget to check it.
 export interface Color { r: bigint; g: bigint; b: bigint; a: bigint }
 
 export function payableTotal(subtotal: number, taxRate: number): number;
-export function parseAmount(text: string): { ok: true; value: number }
-  | { ok: false; code: number };
+// throws XzContractError; the status/out-parameter mapping lives in the wrapper
+export function parseAmount(text: string): number;
 ```
 
 ## 7. Performance budget
