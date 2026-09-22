@@ -24,17 +24,19 @@ layout; it reads the generated header or the `.xzint` interface.
 ## 2. Interface-first workflow
 
 Preferred: declare the boundary in a `.xzint` file and generate both sides from
-it.
+it. The CLI emits the Python binding; `@xz-lang/bridge` emits the TypeScript
+binding.
 
 ```
-liborder.xzint ──► xz pkg gen --lang python   (existing)
-              └──► xz pkg gen --lang ts        (planned)
+liborder.xzint ──► xz pkg gen --lang python         (Xz CLI)
+              └──► @xz-lang/bridge generateBinding   (TypeScript)
                         │
                         ▼
                   src/xz/liborder.ts
 ```
 
-`xz pkg gen --lang ts` mirrors the existing `--lang python` target:
+The generator parses the same `.xzint` grammar the CLI's `--lang python` target
+consumes, and:
 
 - emits a module named after the interface stem,
 - declares each `@cstruct` as a TypeScript interface with matching field order,
@@ -43,9 +45,19 @@ liborder.xzint ──► xz pkg gen --lang python   (existing)
   in a manifest and emits a `bind(backend)` factory (§6), so the same module
   loads on Bun or Node.
 
-Until `--lang ts` ships, `@xz-lang/bridge` provides a generator that parses the
-same `.xzint` grammar and emits the same shape, so the CLI and the toolkit stay
-interchangeable.
+### 2.1 Why the generator lives in the bridge
+
+There is one TypeScript binding generator, and it is `@xz-lang/bridge`. The Xz
+CLI does not grow a `--lang ts` target.
+
+`xz pkg gen --lang python` can emit a self-contained `ctypes` module with no
+external runtime. A TypeScript wrapper cannot be self-contained: it imports the
+bridge runtime (`loadLibrary`, `FfiBackend`, `LibraryManifest`) and emits a
+`bind(backend)` factory that is meaningful only against that runtime, across
+two FFI backends (`bun:ffi`, `koffi`). Emitting it from the Rust CLI would
+duplicate the bridge's public API and manifest shape in a second language, and
+the two would drift. The bridge generator is the single source of truth; the
+CLI keeps `--lang python` and the interface checks both paths share.
 
 ## 3. Loading the library
 
@@ -213,8 +225,8 @@ functions.
 
 ## 8. Open questions
 
-- Should `--lang ts` live in the Xz CLI or in `@xz-lang/bridge`? (Current plan:
-  the CLI, with the bridge generator as a compatible fallback.)
+- Where the TypeScript generator lives is settled (§2.1): in
+  `@xz-lang/bridge`, not the Xz CLI.
 - Zero-copy ownership rules for retained pointers need a contract syntax that
   `.xzint` cannot currently express.
 - Edge runtime requires Wasm, which changes the loading story entirely.

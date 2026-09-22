@@ -114,10 +114,11 @@ The component contracts are specified in [ARCHITECTURE.md](ARCHITECTURE.md).
 
 ### 5.1 FFI and interoperability bridge (`@xz-lang/bridge`)
 
-- **P0** — Automated TypeScript wrapper generator from `.xzint` interface
-  files, mirroring the existing `xz pkg gen --lang python` flow with a
-  `--lang ts` target (or a bridge-side generator that consumes the same
-  interface).
+- **P0** — Automated TypeScript wrapper generator over `.xzint` interface
+  files, implemented in `@xz-lang/bridge`. It consumes the same interface the
+  existing `xz pkg gen --lang python` flow uses but does not become a CLI
+  `--lang ts` target: the generated module depends on the bridge runtime (see
+  [docs/01-bridge.md](docs/01-bridge.md) §2.1).
 - **P0** — Direct call path for Next.js Server Actions into compiled Xz shared
   libraries (`.so` / `.dylib` / `.dll`), using `bun:ffi` on Bun and a
   Node-compatible FFI (e.g. `koffi` / an N-API addon) on Node.
@@ -220,7 +221,8 @@ Targets are measured per release on the benchmark suite introduced in
 
 - [ ] Add a WebAssembly compilation target for Vercel Edge Runtime
   compatibility.
-- [ ] Publish an official TypeScript type-generator plugin (`xz pkg gen --lang ts`).
+- [ ] Publish the `@xz-lang/bridge` TypeScript binding generator as a stable
+  package.
 - [ ] Release v1.0.0 stable with comprehensive documentation.
 
 Full breakdown: [docs/05-roadmap.md](docs/05-roadmap.md).

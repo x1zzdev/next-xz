@@ -58,9 +58,10 @@ Rules:
 
 - Only `@export` symbols are bound. Non-exported functions keep internal
   linkage and are unreachable.
-- The generator mirrors `xz bind --lang python`: it reads the same `@export`
-  signatures and `@cstruct` records, and emits a wrapper named after the source
-  stem.
+- The generator lives in `@xz-lang/bridge` and is canonical; the Xz CLI does
+  not emit TypeScript (see [docs/01-bridge.md](docs/01-bridge.md) §2.1). It
+  mirrors `xz bind --lang python`: it reads the same `@export` signatures and
+  `@cstruct` records, and emits a wrapper named after the source stem.
 - A signature that is not C-representable is a generator error, not a warning.
   This matches the compiler's own rule for `@export`.
 - `Result` cannot cross the C ABI. A C-representable Xz wrapper is required;

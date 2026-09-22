@@ -16,8 +16,8 @@ Goal: prove the call path works end to end and is fast enough.
   - Bun loader over `bun:ffi`.
   - Node loader over `koffi` (addon path deferred).
   - Version pinning and symbol checks.
-- [ ] Implement the TypeScript binding generator over `.xzint` (fallback until
-  `xz pkg gen --lang ts` ships).
+- [ ] Implement the TypeScript binding generator over `.xzint` in
+  `@xz-lang/bridge` (the canonical generator; no CLI `--lang ts` target).
 - [x] Create a benchmark suite comparing native TS logic vs. Xz FFI execution
   speed and latency. *(`@xz-lang/bridge` measures per-call latency/throughput and
   checks the 0.5 ms overhead budget; real FFI numbers await koffi + a compiled
@@ -58,8 +58,8 @@ with badges alone.
 Goal: production-ready across runtimes.
 
 - [ ] Add a WebAssembly compilation target for Vercel Edge Runtime.
-- [ ] Publish the official TypeScript type-generator plugin
-  (`xz pkg gen --lang ts`).
+- [ ] Publish the `@xz-lang/bridge` TypeScript binding generator as a stable
+  package.
 - [ ] Harden the error-channel mapping (Result → typed exception) with a
   generated shim.
 - [ ] Release v1.0.0 stable with comprehensive documentation.
