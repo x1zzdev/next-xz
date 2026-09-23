@@ -162,6 +162,15 @@ signature. The two runtimes therefore differ in capability, not in API: a
 program that needs struct-valued exports must run on Node until `bun:ffi` gains
 by-value struct support.
 
+`koffi.struct` registers into a process-global, name-keyed table. `KoffiBackend`
+prefixes every registration with a per-instance namespace (`<name>__xzb<n>`) so
+a second backend in the same process cannot collide with the first or with
+another koffi consumer, and the same `@cstruct` name may be registered with
+different layouts across backends. Within one backend the neutral name still
+maps to one layout: a repeated name with an identical layout reuses the
+registration, and a conflicting layout is a hard `BridgeRuntimeError`, never a
+silent reuse or a raw koffi duplicate-name throw.
+
 `koffi` decodes a `void*` struct field as an opaque pointer, not a byte view. A
 symbol that returns `XzStr`/`XzBytes` is therefore wrapped: the loader reads the
 returned `len` bytes through `koffi.decode` and hands the binding a
