@@ -257,7 +257,10 @@ cycle rules: `mapXzTypeToFfi` and `mapTypeToTs` perform structural mapping only
 and assume the interface already passed that pass, so the manifest path and the
 generator cannot disagree about what is representable. A mapping helper that is
 called without validation throws `BridgeDefinitionError` as an internal
-invariant violation, not a rule message.
+invariant violation, not a rule message. No standalone per-type
+representability predicate is exported; a caller that needs to know whether a
+declaration is C-representable reads the `validateInterface` problem list
+instead of re-deriving the rule.
 
 ## 7. Performance budget
 
