@@ -40,7 +40,7 @@ liborder.xzint ──► xz pkg gen --lang python         (Xz CLI)
 ```
 
 The generator parses the same `.xzint` grammar the CLI's `--lang python` target
-consumes, and:
+consumes, plus the bridge-side `release` clause (§4.2), and:
 
 - emits a module named after the interface stem,
 - declares each `@cstruct` as a TypeScript interface with matching field order,
@@ -172,6 +172,11 @@ a `release` clause is a hard error, and a `release` clause on a return that is
 not `transfer` is a definition error: a buffer is never silently leaked or
 freed twice. Only a top-level `Str`/`Bytes` return has a release path; a
 pointer-carrying `@cstruct` handle return is still rejected (§4.4).
+
+The `release` clause is a bridge-side `.xzint` extension. The generator parses
+and emits it, but the grammar is owned by Xz (§2.1): the clause must be added to
+Xz docs/11, `validate_interface`, and `xz pkg gen --lang python` before an
+interface that uses it is portable to the CLI (§8).
 
 `Str`/`Bytes` are marshalled at top level only. A `@cstruct` field of either
 type and by-value payloads remain hard errors until the generator emits their
@@ -312,12 +317,13 @@ ownership declaration that Xz permits only on a foreign `extern func`, but a
 ownership from the C caller. It still rejects a `transfer` return whose type is
 not pointer-carrying (`Str`, `Bytes`, `Ptr`, or a `@cstruct` record with a `Ptr`
 field), the compiler's ownership rule; a scalar has no ownership to transfer.
-It will also check the `release` clause of §4.2 once the `release` grammar
-lands: the named symbol must be an `extern func` declared in the same interface
-with exactly one borrowed `Ptr` parameter and a `Unit` return, and a clause on a
-non-`transfer` return is a definition error. Until that grammar lands the
-generator rejects every `transfer` return (no symbol to release through), rather
-than leak the buffer. `mut` and `transfer` are already mutually exclusive in the
+It also checks the `release` clause of §4.2: the named symbol must be an
+`extern func` declared in the same interface with exactly one borrowed `Ptr`
+parameter and a `Unit` return, a `transfer` return must carry one, and a clause
+on a non-`transfer` return is a definition error. The bridge implements this
+clause ahead of Xz (it is a `.xzint` extension, §4.2), so a `transfer` return is
+accepted with a valid release symbol and rejected without one rather than
+leaked. `mut` and `transfer` are already mutually exclusive in the
 grammar. This is the
 same C-representability rule the compiler applies to `@export`. A `Str`/`Bytes`
 `@cstruct` field is C-representable and passes this check; the generator rejects
@@ -365,16 +371,15 @@ functions.
   deallocator contract is settled (§4.2): the symbol carries a `release <symbol>`
   clause, the named `extern func` takes one borrowed `Ptr` and returns `Unit`,
   and the binding copies the returned buffer then frees it through that symbol.
-  The clause is not in the `.xzint` grammar yet, and the grammar is owned by Xz
-  (§2.1), so Xz docs/11, the CLI's `validate_interface`, and `xz pkg gen --lang
-  python` must accept it before the bridge can parse it; the Python wrapper
-  still rejects a `transfer` return ([Xz
+  The bridge parser, validator, and generator implement the clause. Portability
+  is the open part: the grammar is owned by Xz (§2.1), so Xz docs/11, the CLI's
+  `validate_interface`, and `xz pkg gen --lang python` must accept the clause
+  before an interface using it is portable; the Python wrapper still rejects a
+  `transfer` return ([Xz
   docs/10](https://github.com/x1zzdev/Xz/blob/main/docs/10-ffi-interop.md)).
-  Until then the bridge keeps rejecting a `transfer` return rather than leak the
-  buffer.
 - A `.xzint` can describe either an Xz `@export` boundary or a foreign C
   library, and only the latter may carry `transfer`; nothing in the file marks
   which it is. The release contract (§4.2) assumes the foreign-C
   interpretation, so an interface-kind marker must be specified before the
-  generator can accept `transfer` at all.
+  distinction is enforced.
 - Edge runtime requires Wasm, which changes the loading story entirely.
