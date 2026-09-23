@@ -73,6 +73,11 @@ Rules:
 - `Result` cannot cross the C ABI. A C-representable Xz wrapper is required;
   the TypeScript binding maps its status/out-parameter back to a thrown typed
   error. See [docs/01-bridge.md](docs/01-bridge.md).
+- One `FfiBackend` contract has three implementations: `bun:ffi` (Bun), `koffi`
+  (Node), and WebAssembly (`WasmBackend`, Vercel Edge). The Wasm backend binds a
+  `WebAssembly.Instance` and supports scalar signatures only until Xz defines a
+  linear-memory ABI; `Str`/`Bytes`/`@cstruct`/`Ptr` are hard errors there. See
+  [docs/01-bridge.md](docs/01-bridge.md) §3.2.
 
 ### 2.2 `@xz-lang/agent`
 

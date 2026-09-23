@@ -100,7 +100,7 @@ CLI keeps `--lang python` and the interface checks both paths share.
 |---|---|---|
 | Bun | `bun:ffi` `dlopen` + `FFIType` | Fastest path; native in the runtime. |
 | Node | `koffi` (default) or an N-API addon | `koffi` is the current practical FFI for Node; the addon path is for hot functions. |
-| Vercel Edge | Wasm (Phase 4) | Native `.so` is not available on the Edge runtime. |
+| Vercel Edge | WebAssembly (`WasmBackend`) | No native `.so`; scalar signatures only (§3.2). |
 
 The loader:
 
@@ -161,6 +161,35 @@ view would free the wrong allocation. `KoffiBackend` targets the current
 
 The encode/decode of a JavaScript `string` or `Uint8Array` into an `XzStr`/
 `XzBytes` value belongs to the generated binding (§4.2), not the loader.
+
+### 3.2 Wasm / Edge runtime
+
+Vercel Edge has no native loader: no `dlopen`, no `bun:ffi`, no `koffi`. The
+Edge path is WebAssembly. `WasmBackend` implements the same `FfiBackend`
+contract over a `WebAssembly.Instance`, and `loadWasmLibrary(manifest, options,
+module)` binds it through the same `loadLibrary` (version pin, symbol checks,
+typed facade). The backend is the only thing that changes; the generated
+module's `bind(backend)` factory already accepts any backend (§6).
+
+The compiler does not emit a Wasm artifact yet (Xz has no Wasm target), so the
+bridge defines the loading contract only: the caller supplies the compiled
+`WebAssembly.Module` from a future `xz build --wasm` output or an equivalent
+producer. The loader never guesses a module's shape.
+
+The Wasm path supports scalar signatures only: `Bool` → `i32` (coerced to a
+`boolean`), `Char` → `i32` (one-character `string`), `Int`/`usize` → `i64`
+(`bigint`), `Float` → `f64`, and `Unit` as a return. `Str`, `Bytes`, `@cstruct`,
+and `Ptr` are hard errors, not a lossy fallback: by-value structs and pointers
+need a linear-memory ABI the compiler has not defined, the same reason
+`bun:ffi` refuses a struct (§3.1). A symbol declared in the manifest but missing
+from the instance throws `BridgeSymbolError`.
+
+`detectPlatform` reports `"edge"` when neither the `Bun` global nor Node's
+`process.versions.node` is present but `WebAssembly` is. `loadPlatformLibrary`
+cannot fetch or instantiate a module on its own — there is no agreed artifact
+path, fetch, or import surface — so on Edge it throws `BridgeRuntimeError`
+directing the caller to `loadWasmLibrary` with a module it compiled itself.
+Auto-fetch on Edge is deferred until the artifact exists.
 
 ## 4. Marshalling
 
@@ -449,4 +478,11 @@ functions.
   open part: the marker is a bridge-side extension ahead of the grammar owner,
   so Xz docs/11 and `validate_interface` must accept it (with the `release`
   clause) before an interface that uses them is portable to the CLI.
-- Edge runtime requires Wasm, which changes the loading story entirely.
+- Edge runtime loading is settled at the contract level (§3.2): a
+  `WasmBackend` over WebAssembly sits behind the same `FfiBackend`, and
+  `loadWasmLibrary` binds it through `loadLibrary`. What stays open is the
+  artifact and ABI: Xz has no Wasm target, so there is no `xz build --wasm`, no
+  linear-memory layout for `Str`/`Bytes`/`@cstruct`, and no agreed module import
+  surface. The bridge supports scalar signatures and rejects the rest rather
+  than invent a layout; auto-fetch on Edge (`loadPlatformLibrary`) awaits the
+  artifact.

@@ -58,6 +58,9 @@ with badges alone.
 Goal: production-ready across runtimes.
 
 - [ ] Add a WebAssembly compilation target for Vercel Edge Runtime.
+  - [x] Bridge side: `WasmBackend` + `loadWasmLibrary` bind a scalar-signature
+    `WebAssembly.Module` through the shared loader contract (docs/01 §3.2).
+    The compiler target (`xz build --wasm`) is still missing.
 - [ ] Publish the `@xz-lang/bridge` TypeScript binding generator as a stable
   package.
 - [ ] Harden the error-channel mapping (Result → typed exception) with a

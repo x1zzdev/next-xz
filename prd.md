@@ -122,6 +122,10 @@ The component contracts are specified in [ARCHITECTURE.md](ARCHITECTURE.md).
 - **P0** — Direct call path for Next.js Server Actions into compiled Xz shared
   libraries (`.so` / `.dylib` / `.dll`), using `bun:ffi` on Bun and a
   Node-compatible FFI (e.g. `koffi` / an N-API addon) on Node.
+- **P1** — Edge runtime path over WebAssembly: the same loader contract binds a
+  scalar-signature `.wasm` module through `WasmBackend` and `loadWasmLibrary`,
+  since Vercel Edge has no native FFI. Blocking on an Xz Wasm compilation
+  target; see [docs/01-bridge.md](docs/01-bridge.md) §3.2.
 - **P0** — Only `@export` functions cross the boundary. Every exported
   signature must be C-representable end to end (`Bool`, `Int`, `usize`,
   `Float`, `Char`, `Str`, `Bytes`, `Ptr`, `@cstruct record`; `Unit` return
