@@ -85,13 +85,36 @@ test("rejects a transfer parameter the exported boundary cannot carry", () => {
   );
 });
 
-test("rejects a transfer return the binding cannot own", () => {
+test("rejects a transfer return without a release symbol", () => {
   const iface = parseInterface("extern func read(path: Str) -> transfer Str\n");
   assert.throws(
     () => generateBinding(iface, options),
     (error: unknown) =>
-      error instanceof BridgeDefinitionError && error.message.includes("transfer"),
+      error instanceof BridgeDefinitionError &&
+      error.message.includes("must declare its deallocator"),
   );
+});
+
+test("rejects a transfer return with no Str/Bytes release path", () => {
+  const iface = parseInterface(
+    "extern func free(ptr: Ptr) -> Unit\nextern func get() -> transfer Ptr release free\n",
+  );
+  assert.throws(
+    () => generateBinding(iface, options),
+    (error: unknown) =>
+      error instanceof BridgeDefinitionError &&
+      error.message.includes("only for top-level Str/Bytes"),
+  );
+});
+
+test("emits a release call around a transfer return", () => {
+  const iface = parseInterface(
+    "extern func free(ptr: Ptr) -> Unit\nextern func strdup(s: Str) -> transfer Str release free\n",
+  );
+  const source = generateBinding(iface, options);
+  assert.match(source, /const result = symbols\["strdup"\]!\(encodeStr\(s\)\) as XzPointerValue;/);
+  assert.match(source, /try \{\n        return decodeStr\(result\);/);
+  assert.match(source, /finally \{\n        symbols\["free"\]!\(result\.ptr\);/);
 });
 
 test("rejects a Str field inside a @cstruct record", () => {
@@ -285,6 +308,48 @@ test("generated module marshals Str/Bytes through the injected backend", async (
     assert.equal(binding.greet("héllo"), "hello");
     assert.deepEqual([...seen[1]!.ptr], [...new TextEncoder().encode("héllo")]);
 
+    binding.close();
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("generated module copies a transferred Str and releases the original", async () => {
+  const iface = parseInterface(
+    "extern func free(ptr: Ptr) -> Unit\nextern func strdup(s: Str) -> transfer Str release free\n",
+  );
+  const source = generateBinding(iface, { ...options, importFrom: bridgeEntry });
+
+  const dir = await mkdtemp(join(tmpdir(), "next-xz-gen-"));
+  try {
+    const file = join(dir, "liborder.ts");
+    await writeFile(file, source, "utf8");
+
+    const module = (await import(pathToFileURL(file).href)) as {
+      bind(backend: FfiBackend): {
+        strdup(s: string): string;
+        close(): void;
+      };
+    };
+
+    const encoder = new TextEncoder();
+    const freed: Uint8Array[] = [];
+    const backend: FfiBackend = {
+      dlopen: () => ({
+        symbols: {
+          strdup: () => ({ ptr: encoder.encode("copy"), len: 4 }),
+          free: (ptr: unknown) => {
+            freed.push(ptr as Uint8Array);
+          },
+        },
+        close: () => {},
+      }),
+    };
+
+    const binding = module.bind(backend);
+    assert.equal(binding.strdup("source"), "copy");
+    assert.equal(freed.length, 1);
+    assert.deepEqual([...freed[0]!], [...encoder.encode("copy")]);
     binding.close();
   } finally {
     await rm(dir, { recursive: true, force: true });

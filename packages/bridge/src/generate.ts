@@ -1,7 +1,7 @@
 import { BridgeDefinitionError } from "./errors.js";
 import { manifestFromInterface, type LibraryManifest } from "./ffi/manifest.js";
 import type { FfiType } from "./ffi/types.js";
-import { cstructNames, mapTypeToTs } from "./type-map.js";
+import { cstructNames, mapTypeToTs, renderXzType } from "./type-map.js";
 import type { CStruct, ExternFunc, Interface, Param, XzType } from "./xzint/ast.js";
 
 export interface GenerateOptions {
@@ -54,9 +54,16 @@ function assertGeneratable(
   cstructs: ReadonlyMap<string, CStruct>,
 ): void {
   if (func.transferReturn) {
-    throw new BridgeDefinitionError(
-      `symbol '${func.name}': return is declared 'transfer'; the generated binding copies the returned buffer and cannot take ownership of it`,
-    );
+    if (!isNamed(func.returnType, "Str") && !isNamed(func.returnType, "Bytes")) {
+      throw new BridgeDefinitionError(
+        `symbol '${func.name}': a 'transfer' return is emitted only for top-level Str/Bytes; '${renderXzType(func.returnType)}' has no release path`,
+      );
+    }
+    if (func.release === undefined) {
+      throw new BridgeDefinitionError(
+        `symbol '${func.name}': a 'transfer' return must declare its deallocator with 'release <symbol>'`,
+      );
+    }
   }
   for (const param of func.params) {
     if (param.mutable) {
@@ -219,7 +226,18 @@ function emitBindFunction(iface: Interface, names: ReadonlySet<string>): string[
     const args = func.params.map(emitArgument);
     const call = `symbols[${JSON.stringify(func.name)}]!(${args.join(", ")})`;
     lines.push(`    ${func.name}(${params}) {`);
-    if (isNamed(func.returnType, "Str")) {
+    if (
+      func.transferReturn &&
+      (isNamed(func.returnType, "Str") || isNamed(func.returnType, "Bytes"))
+    ) {
+      const decode = isNamed(func.returnType, "Str") ? "decodeStr" : "decodeBytes";
+      lines.push(`      const result = ${call} as XzPointerValue;`);
+      lines.push("      try {");
+      lines.push(`        return ${decode}(result);`);
+      lines.push("      } finally {");
+      lines.push(`        symbols[${JSON.stringify(func.release!)}]!(result.ptr);`);
+      lines.push("      }");
+    } else if (isNamed(func.returnType, "Str")) {
       lines.push(`      return decodeStr(${call} as XzPointerValue);`);
     } else if (isNamed(func.returnType, "Bytes")) {
       lines.push(`      return decodeBytes(${call} as XzPointerValue);`);
