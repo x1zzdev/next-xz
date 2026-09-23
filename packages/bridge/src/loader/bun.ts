@@ -44,10 +44,16 @@ export class BunFfiBackend implements FfiBackend {
     return { symbols: library.symbols, close: () => library.close() };
   }
 
+  /**
+   * `bun:ffi`'s FFIType table covers scalars and raw pointers only; it has no
+   * by-value struct type, so `Str`, `Bytes`, or a `@cstruct` cannot be
+   * declared. The loader refuses rather than degrade the signature and names
+   * the Node koffi backend as the supported path (§3.1).
+   */
   private toFfiType(type: FfiType): number {
     if (typeof type !== "string") {
       throw new BridgeRuntimeError(
-        `bun:ffi cannot declare struct '${type.name}' by value; use the Node koffi loader for Str/Bytes/@cstruct symbols`,
+        `bun:ffi has no by-value struct FFIType for '${type.name}'; use the Node koffi loader for Str/Bytes/@cstruct symbols`,
       );
     }
     const value = this.ffi.FFIType[BUN_FFI_KEY[type]];

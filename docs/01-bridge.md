@@ -150,17 +150,19 @@ real `.so` smoke test pins this contract, including the full `uint64` range and
 a hard error on an unsafe `number`. The Bun path is not exercised: `bun:ffi`'s
 64-bit contract stays unverified until a Bun runtime is available (§8).
 
-`bun:ffi` registers only scalar and pointer FFIType values; it cannot declare a
-struct passed by value. A symbol whose signature contains `Str`, `Bytes`, or a
-`@cstruct` therefore fails at load time with `BridgeRuntimeError`. The loader
-never degrades the signature silently.
+`bun:ffi` registers only scalar and pointer FFIType values; its FFIType table
+has no by-value struct type. A symbol whose signature contains `Str`, `Bytes`,
+or a `@cstruct` therefore fails at load time with `BridgeRuntimeError`, whose
+message names the struct and points at the Node koffi loader. The loader never
+degrades the signature silently.
 
 The Node loader over `koffi` declares by-value structs, so `Str`/`Bytes`/
 `@cstruct` symbols load and call on Node: `koffi.struct` registers each layout
 (inner records first) and the registered type is used in the function
 signature. The two runtimes therefore differ in capability, not in API: a
-program that needs struct-valued exports must run on Node until `bun:ffi` gains
-by-value struct support.
+program that needs struct-valued exports must run on Node. This asymmetry is a
+settled contract, not a temporary gap: Bun exposes no struct FFIType to bind to,
+so the Bun path stays unavailable until Bun adds one.
 
 `koffi.struct` registers into a process-global, name-keyed table. `KoffiBackend`
 prefixes every registration with a per-instance namespace (`<name>__xzb<n>`) so
@@ -498,7 +500,9 @@ functions.
   a `transfer` return plus deallocator, §4.2): `koffi` exposes a returned
   `void*` as an opaque pointer, the loader decodes it and preserves the original
   as `address`, and the release symbol frees that original. Bun's by-value
-  struct path still cannot be exercised and stays unverified.
+  struct path is a settled capability difference, not an open question: Bun's
+  FFIType table has no by-value struct type, so no Bun binding can be exercised
+  until Bun adds one (§3.1).
 - A `transfer` return (`-> transfer T`) moves ownership to the caller. The
   deallocator contract is settled (§4.2): the symbol carries a `release <symbol>`
   clause, the named `extern func` takes one borrowed `Ptr` and returns `Unit`,

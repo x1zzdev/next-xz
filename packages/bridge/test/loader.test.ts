@@ -110,7 +110,7 @@ test("BunFfiBackend maps neutral FFI types to bun:ffi FFIType values", () => {
   assert.equal(typeof library.symbols["add"], "function");
 });
 
-test("BunFfiBackend refuses a struct passed by value", () => {
+test("BunFfiBackend refuses a struct passed by value and points at koffi", () => {
   const backend = new BunFfiBackend({ FFIType: { void: 13 }, dlopen: () => ({ symbols: {}, close: () => {} }) });
   assert.throws(
     () =>
@@ -129,6 +129,9 @@ test("BunFfiBackend refuses a struct passed by value", () => {
           returns: "void",
         },
       }),
-    BridgeRuntimeError,
+    (error: unknown) =>
+      error instanceof BridgeRuntimeError &&
+      error.message.includes("XzStr") &&
+      error.message.includes("koffi"),
   );
 });
