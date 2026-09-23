@@ -169,6 +169,17 @@ test("rejects a function body as outside the .xzint subset", () => {
   );
 });
 
+test("rejects numeric and string literals as outside the .xzint subset", () => {
+  assert.throws(
+    () => parseInterface(`${EXPORT}extern func f(n: Int) -> Int\nconst LIMIT = 42\n`, "lib.xzint"),
+    XzintParseError,
+  );
+  assert.throws(
+    () => parseInterface(`${EXPORT}extern func f(s: Str) -> Int\nconst NAME = "lib"\n`, "lib.xzint"),
+    XzintParseError,
+  );
+});
+
 test("rejects generic extern funcs", () => {
   assert.throws(
     () => parseInterface(`${EXPORT}extern func id[T](x: T) -> T\n`),

@@ -49,6 +49,15 @@ consumes, plus the bridge-side `release` clause (§4.2), and:
   in a manifest and emits a `bind(backend)` factory (§6), so the same module
   loads on Bun or Node.
 
+The accepted surface is declaration-only: an interface marker, `extern func`
+signatures, and `@cstruct record` declarations, matching the rule Xz's
+`validate_interface` enforces. The bridge lexer and parser reject anything else
+— another declaration form (`func`/`record`/`enum`/`task`/`chan`), a function
+body, or a numeric/string/char literal — as a parse error. That rejection is
+deliberate, not a gap to relax: a literal or a body has no place in a C ABI
+description, so the subset stays closed until the grammar owner widens the
+interface surface.
+
 ### 2.1 Interface kind
 
 Every `.xzint` opens with exactly one interface-kind marker on its own line:
