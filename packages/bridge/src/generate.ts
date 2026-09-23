@@ -1,7 +1,8 @@
 import { BridgeDefinitionError } from "./errors.js";
 import { manifestFromInterface, type LibraryManifest } from "./ffi/manifest.js";
 import type { FfiType } from "./ffi/types.js";
-import { cstructNames, isPrimitive, mapTypeToTs } from "./type-map.js";
+import { cstructNames, mapTypeToTs } from "./type-map.js";
+import { formatInterfaceProblem, validateInterface } from "./validate.js";
 import type { CStruct, ExternFunc, Interface, Param, XzType } from "./xzint/ast.js";
 
 export interface GenerateOptions {
@@ -14,13 +15,17 @@ export interface GenerateOptions {
 const DEFAULT_IMPORT = "@xz-lang/bridge";
 
 export function generateBinding(iface: Interface, options: GenerateOptions): string {
+  const problems = validateInterface(iface);
+  if (problems.length > 0) {
+    throw new BridgeDefinitionError(formatInterfaceProblem(problems[0]!));
+  }
   const cstructs: ReadonlyMap<string, CStruct> = new Map(
     iface.cstructs.map((cstruct) => [cstruct.name, cstruct]),
   );
   const names = cstructNames(iface);
 
   for (const func of iface.funcs) {
-    assertGeneratable(func, cstructs, names);
+    assertGeneratable(func, cstructs);
   }
 
   const manifest = manifestFromInterface(iface, {
@@ -52,7 +57,6 @@ export function generateBinding(iface: Interface, options: GenerateOptions): str
 function assertGeneratable(
   func: ExternFunc,
   cstructs: ReadonlyMap<string, CStruct>,
-  names: ReadonlySet<string>,
 ): void {
   if (func.transferReturn) {
     throw new BridgeDefinitionError(
@@ -70,9 +74,9 @@ function assertGeneratable(
         `symbol '${func.name}': parameter '${param.name}' is declared 'transfer'; ownership handoff is emitted only for Str and Bytes buffers, which the binding can retain`,
       );
     }
-    assertMarshallable(func.name, param.type, cstructs, names, "param");
+    assertMarshallable(func.name, param.type, cstructs, "param");
   }
-  assertMarshallable(func.name, func.returnType, cstructs, names, "return");
+  assertMarshallable(func.name, func.returnType, cstructs, "return");
 }
 
 function isBufferType(type: XzType): boolean {
@@ -83,15 +87,9 @@ function assertMarshallable(
   symbol: string,
   type: XzType,
   cstructs: ReadonlyMap<string, CStruct>,
-  names: ReadonlySet<string>,
   position: "param" | "return" | "field",
 ): void {
-  if (type.kind === "generic") {
-    throw new BridgeDefinitionError(
-      `symbol '${symbol}': generic type '${type.name}' is not C-representable`,
-    );
-  }
-  if (type.name === "Str" || type.name === "Bytes") {
+  if (type.kind === "named" && (type.name === "Str" || type.name === "Bytes")) {
     if (position === "field") {
       throw new BridgeDefinitionError(
         `symbol '${symbol}': '${type.name}' as a @cstruct field is not marshalled by the generated binding; pass it as a top-level parameter or return instead`,
@@ -99,20 +97,10 @@ function assertMarshallable(
     }
     return;
   }
-  if (isPrimitive(type.name)) {
-    if (type.name === "Unit" && position !== "return") {
-      throw new BridgeDefinitionError(`symbol '${symbol}': Unit is allowed only as a return type`);
+  if (type.kind === "named" && cstructs.has(type.name)) {
+    for (const field of cstructs.get(type.name)!.fields) {
+      assertMarshallable(symbol, field.type, cstructs, "field");
     }
-    return;
-  }
-  const record = cstructs.get(type.name);
-  if (record === undefined) {
-    throw new BridgeDefinitionError(
-      `symbol '${symbol}': unknown type '${type.name}'; declare it as a @cstruct record`,
-    );
-  }
-  for (const field of record.fields) {
-    assertMarshallable(symbol, field.type, cstructs, names, "field");
   }
 }
 

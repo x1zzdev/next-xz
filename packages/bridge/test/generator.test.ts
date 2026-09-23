@@ -96,6 +96,15 @@ test("rejects a Str field inside a @cstruct record", () => {
   assert.throws(() => generateBinding(iface, options), BridgeDefinitionError);
 });
 
+test("rejects a cyclic @cstruct interface instead of recursing forever", () => {
+  const iface = parseInterface("@cstruct record A {\n    b: B\n}\n@cstruct record B {\n    a: A\n}\n");
+  assert.throws(
+    () => generateBinding(iface, options),
+    (error: unknown) =>
+      error instanceof BridgeDefinitionError && error.message.includes("cycle"),
+  );
+});
+
 test("casts each symbol call to the declared TypeScript return type", () => {
   const iface = parseInterface(
     "@cstruct record Vec2 {\n    x: Int\n    y: Int\n}\nextern func add(a: Int, b: Int) -> Int\nextern func sum(v: Vec2) -> Int\nextern func run() -> Unit\n",
