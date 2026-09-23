@@ -21,6 +21,7 @@ export type {
   Field,
   GenericType,
   Interface,
+  InterfaceKind,
   NamedType,
   Param,
   PrimitiveType,

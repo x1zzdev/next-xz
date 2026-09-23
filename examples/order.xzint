@@ -1,6 +1,8 @@
 // Boundary of order.xz. `@xz-lang/bridge` generates src/xz/order.ts from this
 // file; the exported signatures must stay in step with order.xz.
 
+@interface export
+
 @cstruct record LineItem {
     quantity: Int
     unit_price: Float

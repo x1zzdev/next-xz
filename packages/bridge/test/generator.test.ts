@@ -13,6 +13,8 @@ import {
 } from "../src/index.js";
 
 const bridgeEntry = new URL("../src/index.ts", import.meta.url).href;
+const EXPORT = "@interface export\n";
+const FOREIGN = "@interface foreign\n";
 
 const options = {
   name: "liborder",
@@ -22,7 +24,7 @@ const options = {
 
 test("emits a TypeScript interface per @cstruct with declaration order", () => {
   const iface = parseInterface(
-    "@cstruct record Point {\n    x: Int\n    y: Int\n}\n@cstruct record Line {\n    a: Point\n    b: Point\n}\n",
+    `${EXPORT}@cstruct record Point {\n    x: Int\n    y: Int\n}\n@cstruct record Line {\n    a: Point\n    b: Point\n}\n`,
   );
   const source = generateBinding(iface, options);
   assert.match(source, /export interface Point \{\n  x: bigint;\n  y: bigint;\n\}/);
@@ -30,7 +32,9 @@ test("emits a TypeScript interface per @cstruct with declaration order", () => {
 });
 
 test("emits a manifest with backend-neutral FFI types", () => {
-  const iface = parseInterface("extern func add(a: Int, b: Int) -> Int\nextern func run() -> Unit\n");
+  const iface = parseInterface(
+    `${EXPORT}extern func add(a: Int, b: Int) -> Int\nextern func run() -> Unit\n`,
+  );
   const source = generateBinding(iface, options);
   assert.match(source, /name: "liborder"/);
   assert.match(source, /path: "\.next-xz\/liborder\.so"/);
@@ -39,7 +43,7 @@ test("emits a manifest with backend-neutral FFI types", () => {
 });
 
 test("emits a loadPlatform entry that selects the backend from the runtime", () => {
-  const iface = parseInterface("extern func add(a: Int, b: Int) -> Int\n");
+  const iface = parseInterface(`${EXPORT}extern func add(a: Int, b: Int) -> Int\n`);
   const source = generateBinding(iface, options);
   assert.match(source, /import \{[^}]*loadPlatformLibrary[^}]*\} from "@xz-lang\/bridge"/);
   assert.match(source, /import \{[^}]*type LoadedLibrary[^}]*\} from "@xz-lang\/bridge"/);
@@ -54,7 +58,7 @@ test("emits a loadPlatform entry that selects the backend from the runtime", () 
 
 test("emits encode/decode calls for Str and Bytes parameters and returns", () => {
   const iface = parseInterface(
-    "extern func parse(text: Str) -> Int\nextern func name(id: Int) -> Str\nextern func raw() -> Bytes\n",
+    `${EXPORT}extern func parse(text: Str) -> Int\nextern func name(id: Int) -> Str\nextern func raw() -> Bytes\n`,
   );
   const source = generateBinding(iface, options);
   assert.match(source, /import \{[^}]*encodeStr[^}]*\} from "@xz-lang\/bridge"/);
@@ -65,7 +69,7 @@ test("emits encode/decode calls for Str and Bytes parameters and returns", () =>
 });
 
 test("rejects a mutable parameter until the contract wrapper is emitted", () => {
-  const iface = parseInterface("extern func parse(mut out: Float) -> Int\n");
+  const iface = parseInterface(`${EXPORT}extern func parse(mut out: Float) -> Int\n`);
   assert.throws(
     () => generateBinding(iface, options),
     (error: unknown) =>
@@ -75,7 +79,7 @@ test("rejects a mutable parameter until the contract wrapper is emitted", () => 
 
 test("rejects a transfer parameter the exported boundary cannot carry", () => {
   const iface = parseInterface(
-    "extern func write(transfer frame: Bytes) -> Int\nextern func send(transfer text: Str)\n",
+    `${EXPORT}extern func write(transfer frame: Bytes) -> Int\nextern func send(transfer text: Str)\n`,
   );
   assert.throws(
     () => generateBinding(iface, options),
@@ -86,7 +90,7 @@ test("rejects a transfer parameter the exported boundary cannot carry", () => {
 });
 
 test("rejects a transfer return without a release symbol", () => {
-  const iface = parseInterface("extern func read(path: Str) -> transfer Str\n");
+  const iface = parseInterface(`${FOREIGN}extern func read(path: Str) -> transfer Str\n`);
   assert.throws(
     () => generateBinding(iface, options),
     (error: unknown) =>
@@ -97,7 +101,7 @@ test("rejects a transfer return without a release symbol", () => {
 
 test("rejects a transfer return with no Str/Bytes release path", () => {
   const iface = parseInterface(
-    "extern func free(ptr: Ptr) -> Unit\nextern func get() -> transfer Ptr release free\n",
+    `${FOREIGN}extern func free(ptr: Ptr) -> Unit\nextern func get() -> transfer Ptr release free\n`,
   );
   assert.throws(
     () => generateBinding(iface, options),
@@ -109,7 +113,7 @@ test("rejects a transfer return with no Str/Bytes release path", () => {
 
 test("emits a release call around a transfer return", () => {
   const iface = parseInterface(
-    "extern func free(ptr: Ptr) -> Unit\nextern func strdup(s: Str) -> transfer Str release free\n",
+    `${FOREIGN}extern func free(ptr: Ptr) -> Unit\nextern func strdup(s: Str) -> transfer Str release free\n`,
   );
   const source = generateBinding(iface, options);
   assert.match(source, /const result = symbols\["strdup"\]!\(encodeStr\(s\)\) as XzPointerValue;/);
@@ -118,13 +122,15 @@ test("emits a release call around a transfer return", () => {
 });
 
 test("rejects a Str field inside a @cstruct record", () => {
-  const iface = parseInterface("@cstruct record Name {\n    text: Str\n}\nextern func id(n: Name) -> Name\n");
+  const iface = parseInterface(
+    `${EXPORT}@cstruct record Name {\n    text: Str\n}\nextern func id(n: Name) -> Name\n`,
+  );
   assert.throws(() => generateBinding(iface, options), BridgeDefinitionError);
 });
 
 test("rejects a duplicate @cstruct declaration before it can be overwritten", () => {
   const iface = parseInterface(
-    "@cstruct record Vec2 { x: Int y: Int }\n@cstruct record Vec2 { a: Int }\nextern func f(v: Vec2) -> Int\n",
+    `${EXPORT}@cstruct record Vec2 { x: Int y: Int }\n@cstruct record Vec2 { a: Int }\nextern func f(v: Vec2) -> Int\n`,
   );
   assert.throws(
     () => generateBinding(iface, options),
@@ -134,7 +140,7 @@ test("rejects a duplicate @cstruct declaration before it can be overwritten", ()
 });
 
 test("rejects an extern function declared more than once", () => {
-  const iface = parseInterface("extern func f() -> Int\nextern func f() -> Int\n");
+  const iface = parseInterface(`${EXPORT}extern func f() -> Int\nextern func f() -> Int\n`);
   assert.throws(
     () => generateBinding(iface, options),
     (error: unknown) =>
@@ -145,7 +151,7 @@ test("rejects an extern function declared more than once", () => {
 
 test("reports interface validation problems before generator-specific rejections", () => {
   const iface = parseInterface(
-    "extern func f(mut out: Float) -> Int\nextern func f() -> Int\n",
+    `${EXPORT}extern func f(mut out: Float) -> Int\nextern func f() -> Int\n`,
   );
   assert.throws(
     () => generateBinding(iface, options),
@@ -156,7 +162,9 @@ test("reports interface validation problems before generator-specific rejections
 });
 
 test("rejects a @cstruct name that shadows a built-in primitive", () => {
-  const iface = parseInterface("@cstruct record Int { value: Float }\nextern func f(x: Int) -> Int\n");
+  const iface = parseInterface(
+    `${EXPORT}@cstruct record Int { value: Float }\nextern func f(x: Int) -> Int\n`,
+  );
   assert.throws(
     () => generateBinding(iface, options),
     (error: unknown) =>
@@ -166,7 +174,9 @@ test("rejects a @cstruct name that shadows a built-in primitive", () => {
 });
 
 test("rejects a cyclic @cstruct interface instead of recursing forever", () => {
-  const iface = parseInterface("@cstruct record A {\n    b: B\n}\n@cstruct record B {\n    a: A\n}\n");
+  const iface = parseInterface(
+    `${EXPORT}@cstruct record A {\n    b: B\n}\n@cstruct record B {\n    a: A\n}\n`,
+  );
   assert.throws(
     () => generateBinding(iface, options),
     (error: unknown) =>
@@ -176,7 +186,7 @@ test("rejects a cyclic @cstruct interface instead of recursing forever", () => {
 
 test("casts each symbol call to the declared TypeScript return type", () => {
   const iface = parseInterface(
-    "@cstruct record Vec2 {\n    x: Int\n    y: Int\n}\nextern func add(a: Int, b: Int) -> Int\nextern func sum(v: Vec2) -> Int\nextern func run() -> Unit\n",
+    `${EXPORT}@cstruct record Vec2 {\n    x: Int\n    y: Int\n}\nextern func add(a: Int, b: Int) -> Int\nextern func sum(v: Vec2) -> Int\nextern func run() -> Unit\n`,
   );
   const source = generateBinding(iface, options);
   assert.match(source, /return asXzInt\(symbols\["add"\]!\(asXzInt\(a\), asXzInt\(b\)\)\);/);
@@ -185,7 +195,7 @@ test("casts each symbol call to the declared TypeScript return type", () => {
 });
 
 test("wraps Int/usize parameters and returns in asXzInt", async () => {
-  const iface = parseInterface("extern func echo(n: Int) -> usize\n");
+  const iface = parseInterface(`${EXPORT}extern func echo(n: Int) -> usize\n`);
   const source = generateBinding(iface, options);
   assert.match(source, /import \{[^}]*asXzInt[^}]*\} from "@xz-lang\/bridge"/);
   assert.match(source, /return asXzInt\(symbols\["echo"\]!\(asXzInt\(n\)\)\);/);
@@ -217,7 +227,7 @@ test("wraps Int/usize parameters and returns in asXzInt", async () => {
 });
 
 test("generated module loads, calls a symbol, and closes through an injected backend", async () => {
-  const iface = parseInterface("extern func add(a: Int, b: Int) -> Int\nextern func noop()\n");
+  const iface = parseInterface(`${EXPORT}extern func add(a: Int, b: Int) -> Int\nextern func noop()\n`);
   const source = generateBinding(iface, { ...options, importFrom: bridgeEntry });
 
   const dir = await mkdtemp(join(tmpdir(), "next-xz-gen-"));
@@ -266,7 +276,7 @@ test("generated module loads, calls a symbol, and closes through an injected bac
 
 test("generated module marshals Str/Bytes through the injected backend", async () => {
   const iface = parseInterface(
-    "extern func hash(data: Bytes) -> Int\nextern func greet(name: Str) -> Str\n",
+    `${EXPORT}extern func hash(data: Bytes) -> Int\nextern func greet(name: Str) -> Str\n`,
   );
   const source = generateBinding(iface, { ...options, importFrom: bridgeEntry });
 
@@ -316,7 +326,7 @@ test("generated module marshals Str/Bytes through the injected backend", async (
 
 test("generated module copies a transferred Str and releases the original", async () => {
   const iface = parseInterface(
-    "extern func free(ptr: Ptr) -> Unit\nextern func strdup(s: Str) -> transfer Str release free\n",
+    `${FOREIGN}extern func free(ptr: Ptr) -> Unit\nextern func strdup(s: Str) -> transfer Str release free\n`,
   );
   const source = generateBinding(iface, { ...options, importFrom: bridgeEntry });
 

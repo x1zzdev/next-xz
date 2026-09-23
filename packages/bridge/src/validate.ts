@@ -68,6 +68,7 @@ export function validateInterface(iface: Interface): readonly InterfaceProblem[]
   const funcNames = new Set<string>();
   const seenFuncDuplicates = new Set<string>();
   const firstFuncs = new Map<string, ExternFunc>();
+  const foreign = iface.kind === "foreign";
   for (const func of iface.funcs) {
     if (funcNames.has(func.name)) {
       if (!seenFuncDuplicates.has(func.name)) {
@@ -87,7 +88,7 @@ export function validateInterface(iface: Interface): readonly InterfaceProblem[]
     firstFuncs.set(func.name, func);
     for (const param of func.params) {
       checkType(records, param.type, func.name, "param", [param.name], problems);
-      if (param.transfer) {
+      if (param.mutable && param.transfer) {
         problems.push({
           kind: "ownership",
           symbol: func.name,
@@ -95,18 +96,48 @@ export function validateInterface(iface: Interface): readonly InterfaceProblem[]
           path: [param.name],
           type: renderXzType(param.type),
           reason:
-            "'transfer' is a C ABI ownership declaration and cannot cross an Xz '@export' boundary; declare it only on a foreign 'extern func'",
+            "'mut' and 'transfer' are both C ABI ownership declarations and cannot be combined on one parameter",
         });
+      } else if (param.transfer) {
+        if (foreign) {
+          checkTransfer(records, param.type, func.name, "param", [param.name], problems);
+        } else {
+          problems.push({
+            kind: "ownership",
+            symbol: func.name,
+            position: "param",
+            path: [param.name],
+            type: renderXzType(param.type),
+            reason:
+              "'transfer' is a C ABI ownership declaration and cannot cross an Xz '@export' boundary; declare it only on an '@interface foreign'",
+          });
+        }
       }
     }
     const returnRepresentable = checkType(records, func.returnType, func.name, "return", [], problems);
-    if (func.transferReturn && returnRepresentable) {
-      checkTransfer(records, func.returnType, func.name, "return", [], problems);
+    if (func.transferReturn) {
+      if (foreign) {
+        if (returnRepresentable) {
+          checkTransfer(records, func.returnType, func.name, "return", [], problems);
+        }
+      } else {
+        problems.push({
+          kind: "ownership",
+          symbol: func.name,
+          position: "return",
+          path: [],
+          type: renderXzType(func.returnType),
+          reason:
+            "a 'transfer' return is a C ABI ownership declaration and cannot cross an Xz '@export' boundary; declare it only on an '@interface foreign'",
+        });
+      }
     }
   }
 
   for (const func of firstFuncs.values()) {
-    checkRelease(firstFuncs, records, func, problems);
+    if (foreign || (func.release !== undefined && !func.transferReturn)) {
+      checkRelease(firstFuncs, records, func, problems);
+    }
   }
 
   for (const cycle of findCycles(records)) {

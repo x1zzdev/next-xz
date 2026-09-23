@@ -47,7 +47,10 @@ export interface CStruct {
   readonly fields: readonly Field[];
 }
 
+export type InterfaceKind = "export" | "foreign";
+
 export interface Interface {
+  readonly kind: InterfaceKind;
   readonly funcs: readonly ExternFunc[];
   readonly cstructs: readonly CStruct[];
 }

@@ -16,7 +16,7 @@ import {
 } from "../src/index.js";
 
 const manifest = (overrides: Partial<LibraryManifest> = {}): LibraryManifest => {
-  const iface = parseInterface("extern func add(a: Int, b: Int) -> Int\n");
+  const iface = parseInterface("@interface export\nextern func add(a: Int, b: Int) -> Int\n");
   return {
     ...manifestFromInterface(iface, { name: "liborder", path: "liborder.so", xzVersion: "0.1.0" }),
     ...overrides,

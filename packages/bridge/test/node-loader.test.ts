@@ -60,7 +60,7 @@ test("KoffiBackend maps neutral FFI scalars to a koffi signature", () => {
 test("KoffiBackend registers an XzStr struct and passes it by value", () => {
   const koffi = fakeKoffi();
   const backend = new KoffiBackend(koffi.module);
-  const iface = parseInterface("extern func show(text: Str) -> Int\n");
+  const iface = parseInterface("@interface export\nextern func show(text: Str) -> Int\n");
   const manifest = manifestFromInterface(iface, {
     name: "liborder",
     path: "liborder.so",
@@ -77,7 +77,7 @@ test("KoffiBackend registers nested @cstruct records inner-first and reuses toke
   const koffi = fakeKoffi();
   const backend = new KoffiBackend(koffi.module);
   const iface = parseInterface(
-    "@cstruct record Point {\n    x: Int\n    y: Int\n}\n@cstruct record Line {\n    a: Point\n    b: Point\n}\nextern func midline(line: Line) -> Point\n",
+    "@interface export\n@cstruct record Point {\n    x: Int\n    y: Int\n}\n@cstruct record Line {\n    a: Point\n    b: Point\n}\nextern func midline(line: Line) -> Point\n",
   );
   const manifest = manifestFromInterface(iface, {
     name: "liborder",
@@ -101,7 +101,7 @@ test("KoffiBackend registers nested @cstruct records inner-first and reuses toke
 test("KoffiBackend registers each struct once across symbols", () => {
   const koffi = fakeKoffi();
   const backend = new KoffiBackend(koffi.module);
-  const iface = parseInterface("extern func a(text: Str) -> Int\nextern func b(text: Str) -> Int\n");
+  const iface = parseInterface("@interface export\nextern func a(text: Str) -> Int\nextern func b(text: Str) -> Int\n");
   const manifest = manifestFromInterface(iface, {
     name: "liborder",
     path: "liborder.so",

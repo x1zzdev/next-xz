@@ -12,6 +12,7 @@ import {
 
 const named = (name: string): XzType => ({ kind: "named", name });
 const noStructs: ReadonlyMap<string, CStruct> = new Map();
+const EXPORT = "@interface export\n";
 
 test("maps C-representable scalars to backend-neutral FFI types", () => {
   assert.equal(mapXzTypeToFfi(named("Bool"), noStructs), "bool");
@@ -44,7 +45,7 @@ test("maps Str and Bytes to two-field pointer/length structs", () => {
 
 test("maps a @cstruct record, including nested records", () => {
   const iface = parseInterface(
-    "@cstruct record Point {\n    x: Int\n    y: Int\n}\n@cstruct record Line {\n    a: Point\n    b: Point\n}\n",
+    `${EXPORT}@cstruct record Point {\n    x: Int\n    y: Int\n}\n@cstruct record Line {\n    a: Point\n    b: Point\n}\n`,
   );
   const cstructs = new Map(iface.cstructs.map((cstruct) => [cstruct.name, cstruct]));
   assert.deepEqual(mapXzTypeToFfi(named("Line"), cstructs), {
@@ -78,7 +79,9 @@ test("maps a @cstruct record, including nested records", () => {
 });
 
 test("manifest validation rejects a cyclic @cstruct before mapping", () => {
-  const iface = parseInterface("@cstruct record A {\n    b: B\n}\n@cstruct record B {\n    a: A\n}\n");
+  const iface = parseInterface(
+    `${EXPORT}@cstruct record A {\n    b: B\n}\n@cstruct record B {\n    a: A\n}\n`,
+  );
   assert.throws(
     () => manifestFromInterface(iface, { name: "lib", path: "lib.so", xzVersion: "0.1.0" }),
     (error: unknown) =>
@@ -87,14 +90,14 @@ test("manifest validation rejects a cyclic @cstruct before mapping", () => {
 });
 
 test("manifest validation rejects Unit parameters and generics before mapping", () => {
-  const unitParam = parseInterface("extern func f(u: Unit) -> Int\n");
+  const unitParam = parseInterface(`${EXPORT}extern func f(u: Unit) -> Int\n`);
   assert.throws(
     () => manifestFromInterface(unitParam, { name: "lib", path: "lib.so", xzVersion: "0.1.0" }),
     (error: unknown) =>
       error instanceof BridgeDefinitionError &&
       error.message.includes("Unit is allowed only as a return type"),
   );
-  const generic = parseInterface("extern func f(v: Result[Int, Int]) -> Int\n");
+  const generic = parseInterface(`${EXPORT}extern func f(v: Result[Int, Int]) -> Int\n`);
   assert.throws(
     () => manifestFromInterface(generic, { name: "lib", path: "lib.so", xzVersion: "0.1.0" }),
     (error: unknown) =>
@@ -103,7 +106,7 @@ test("manifest validation rejects Unit parameters and generics before mapping", 
 });
 
 test("manifest validation rejects a transfer parameter on the exported boundary", () => {
-  const iface = parseInterface("extern func take(transfer amount: Int) -> Int\n");
+  const iface = parseInterface(`${EXPORT}extern func take(transfer amount: Int) -> Int\n`);
   assert.throws(
     () => manifestFromInterface(iface, { name: "lib", path: "lib.so", xzVersion: "0.1.0" }),
     (error: unknown) =>
@@ -112,7 +115,7 @@ test("manifest validation rejects a transfer parameter on the exported boundary"
 });
 
 test("builds a manifest: mut params become pointers, returns keep their type", () => {
-  const iface = parseInterface("extern func parse_amount(text: Str, mut out: Float) -> Int\n");
+  const iface = parseInterface(`${EXPORT}extern func parse_amount(text: Str, mut out: Float) -> Int\n`);
   const manifest = manifestFromInterface(iface, {
     name: "liborder",
     path: ".next-xz/liborder.so",
@@ -148,7 +151,7 @@ test("maps only a validated type: an unvalidated call throws the internal invari
 });
 
 test("rejects a duplicate symbol in the interface", () => {
-  const iface = parseInterface("extern func f() -> Int\nextern func f() -> Int\n");
+  const iface = parseInterface(`${EXPORT}extern func f() -> Int\nextern func f() -> Int\n`);
   assert.throws(
     () =>
       manifestFromInterface(iface, { name: "lib", path: "lib.so", xzVersion: "0.1.0" }),

@@ -18,7 +18,7 @@ test("maps C-representable scalars per ARCHITECTURE section 3", () => {
 });
 
 test("maps a @cstruct record to its TypeScript interface name", () => {
-  const iface = parseInterface("@cstruct record Color {\n    r: usize\n    g: usize\n}\n");
+  const iface = parseInterface("@interface export\n@cstruct record Color {\n    r: usize\n    g: usize\n}\n");
   const cstructs = cstructNames(iface);
   assert.equal(mapTypeToTs(named("Color"), cstructs), "Color");
 });

@@ -1,5 +1,14 @@
 import { XzintParseError } from "../errors.js";
-import type { CStruct, ExternFunc, Field, Interface, NamedType, Param, XzType } from "./ast.js";
+import type {
+  CStruct,
+  ExternFunc,
+  Field,
+  Interface,
+  InterfaceKind,
+  NamedType,
+  Param,
+  XzType,
+} from "./ast.js";
 import { tokenize, type Token, type TokenKind } from "./token.js";
 
 const UNIT: NamedType = { kind: "named", name: "Unit" };
@@ -33,10 +42,16 @@ class Parser {
   ) {}
 
   parseInterface(): Interface {
+    const kind = this.parseInterfaceKind();
     const funcs: ExternFunc[] = [];
     const cstructs: CStruct[] = [];
     while (!this.at("eof")) {
       if (this.at("at")) {
+        if (this.peek(1)?.kind === "ident" && this.peek(1)?.text === "interface") {
+          throw this.error(
+            "the '@interface' marker must appear exactly once, before any declaration",
+          );
+        }
         cstructs.push(this.parseCStruct());
       } else if (this.atIdent("extern")) {
         funcs.push(this.parseExtern());
@@ -47,7 +62,26 @@ class Parser {
         );
       }
     }
-    return { funcs, cstructs };
+    return { kind, funcs, cstructs };
+  }
+
+  private parseInterfaceKind(): InterfaceKind {
+    if (!this.at("at")) {
+      const token = this.peek();
+      throw this.error(
+        `'.xzint' interface files must open with exactly one '@interface export' or '@interface foreign' marker; found '${token.text || token.kind}'`,
+      );
+    }
+    this.expect("at");
+    const annotation = this.expectIdent();
+    if (annotation !== "interface") {
+      throw this.error(`expected '@interface export' or '@interface foreign'; found '@${annotation}'`);
+    }
+    const kind = this.expectIdent();
+    if (kind !== "export" && kind !== "foreign") {
+      throw this.error(`expected 'export' or 'foreign' after '@interface'; found '${kind}'`);
+    }
+    return kind;
   }
 
   private parseCStruct(): CStruct {
@@ -138,8 +172,8 @@ class Parser {
     return type;
   }
 
-  private peek(): Token {
-    return this.tokens[this.position]!;
+  private peek(offset = 0): Token {
+    return this.tokens[this.position + offset]!;
   }
 
   private advance(): Token {
