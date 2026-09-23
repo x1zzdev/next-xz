@@ -96,6 +96,17 @@ test("rejects a Str field inside a @cstruct record", () => {
   assert.throws(() => generateBinding(iface, options), BridgeDefinitionError);
 });
 
+test("rejects a duplicate @cstruct declaration before it can be overwritten", () => {
+  const iface = parseInterface(
+    "@cstruct record Vec2 { x: Int y: Int }\n@cstruct record Vec2 { a: Int }\nextern func f(v: Vec2) -> Int\n",
+  );
+  assert.throws(
+    () => generateBinding(iface, options),
+    (error: unknown) =>
+      error instanceof BridgeDefinitionError && error.message.includes("declared more than once"),
+  );
+});
+
 test("rejects a cyclic @cstruct interface instead of recursing forever", () => {
   const iface = parseInterface("@cstruct record A {\n    b: B\n}\n@cstruct record B {\n    a: A\n}\n");
   assert.throws(

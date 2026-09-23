@@ -1,9 +1,9 @@
 import { isPrimitive, renderXzType } from "./type-map.js";
 import type { CStruct, Interface, XzType } from "./xzint/ast.js";
 
-export type ValidationPosition = "param" | "return" | "field";
+export type ValidationPosition = "param" | "return" | "field" | "declaration";
 
-export type InterfaceProblemKind = "generic" | "unit" | "unknown" | "cycle";
+export type InterfaceProblemKind = "generic" | "unit" | "unknown" | "cycle" | "duplicate";
 
 export interface InterfaceProblem {
   readonly kind: InterfaceProblemKind;
@@ -16,11 +16,27 @@ export interface InterfaceProblem {
 
 export function validateInterface(iface: Interface): readonly InterfaceProblem[] {
   const problems: InterfaceProblem[] = [];
-  const records: ReadonlyMap<string, CStruct> = new Map(
-    iface.cstructs.map((cstruct) => [cstruct.name, cstruct]),
-  );
-
+  const records = new Map<string, CStruct>();
+  const seen = new Set<string>();
   for (const cstruct of iface.cstructs) {
+    if (records.has(cstruct.name)) {
+      if (!seen.has(cstruct.name)) {
+        seen.add(cstruct.name);
+        problems.push({
+          kind: "duplicate",
+          symbol: cstruct.name,
+          position: "declaration",
+          path: [],
+          type: cstruct.name,
+          reason: "@cstruct record is declared more than once",
+        });
+      }
+      continue;
+    }
+    records.set(cstruct.name, cstruct);
+  }
+
+  for (const cstruct of records.values()) {
     for (const field of cstruct.fields) {
       checkType(records, field.type, cstruct.name, "field", [field.name], problems);
     }
@@ -51,6 +67,9 @@ export function formatInterfaceProblem(problem: InterfaceProblem): string {
   const head = `symbol '${problem.symbol}'`;
   if (problem.kind === "cycle") {
     return `${head}: ${problem.reason} (${problem.type})`;
+  }
+  if (problem.kind === "duplicate") {
+    return `${head}: ${problem.reason}`;
   }
   const location =
     problem.position === "return"

@@ -77,6 +77,25 @@ test("collects every problem in one pass", () => {
   assert.deepEqual(kinds, ["generic", "unit", "unknown"]);
 });
 
+test("flags a @cstruct record declared more than once", () => {
+  const iface = parseInterface(
+    "@cstruct record Vec2 { x: Float y: Float }\n@cstruct record Vec2 { a: Int b: Int }\n",
+  );
+  const problems = validateInterface(iface);
+  assert.equal(problems.length, 1);
+  assert.equal(problems[0]?.kind, "duplicate");
+  assert.equal(problems[0]?.symbol, "Vec2");
+  assert.match(formatInterfaceProblem(problems[0]!), /declared more than once/);
+});
+
+test("reports a duplicate @cstruct name only once", () => {
+  const iface = parseInterface(
+    "@cstruct record Vec2 { x: Float }\n@cstruct record Vec2 { x: Float }\n@cstruct record Vec2 { x: Float }\n",
+  );
+  const duplicates = validateInterface(iface).filter((problem) => problem.kind === "duplicate");
+  assert.equal(duplicates.length, 1);
+});
+
 test("formats a problem with symbol, location, and reason", () => {
   const iface = parseInterface("extern func parse(value: Missing) -> Int\n");
   const problem = validateInterface(iface)[0]!;

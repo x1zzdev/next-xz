@@ -239,8 +239,10 @@ until the generator emits their marshalling.
 Before it emits anything, the generator validates the whole interface in one
 pass: `validateInterface` reports every declaration that is not C-representable
 — a generic `Result`/`Option`/collection, `Unit` outside a return, an undeclared
-record, or a cyclic `@cstruct` — instead of failing type by type. This is the
-same C-representability rule the compiler applies to `@export`. A `Str`/`Bytes`
+record, or a cyclic `@cstruct` — instead of failing type by type. It also
+rejects a `@cstruct` name declared more than once, rather than letting the later
+declaration silently replace the earlier one. This is the same
+C-representability rule the compiler applies to `@export`. A `Str`/`Bytes`
 `@cstruct` field is C-representable and passes this check; the generator rejects
 it separately because the binding does not marshal it.
 
