@@ -2,7 +2,6 @@ import { BridgeDefinitionError } from "./errors.js";
 import { manifestFromInterface, type LibraryManifest } from "./ffi/manifest.js";
 import type { FfiType } from "./ffi/types.js";
 import { cstructNames, mapTypeToTs } from "./type-map.js";
-import { formatInterfaceProblem, validateInterface } from "./validate.js";
 import type { CStruct, ExternFunc, Interface, Param, XzType } from "./xzint/ast.js";
 
 export interface GenerateOptions {
@@ -15,10 +14,11 @@ export interface GenerateOptions {
 const DEFAULT_IMPORT = "@xz-lang/bridge";
 
 export function generateBinding(iface: Interface, options: GenerateOptions): string {
-  const problems = validateInterface(iface);
-  if (problems.length > 0) {
-    throw new BridgeDefinitionError(formatInterfaceProblem(problems[0]!));
-  }
+  const manifest = manifestFromInterface(iface, {
+    name: options.name,
+    path: options.libraryPath,
+    xzVersion: options.xzVersion,
+  });
   const cstructs: ReadonlyMap<string, CStruct> = new Map(
     iface.cstructs.map((cstruct) => [cstruct.name, cstruct]),
   );
@@ -28,11 +28,6 @@ export function generateBinding(iface: Interface, options: GenerateOptions): str
     assertGeneratable(func, cstructs);
   }
 
-  const manifest = manifestFromInterface(iface, {
-    name: options.name,
-    path: options.libraryPath,
-    xzVersion: options.xzVersion,
-  });
   const needs = collectMarshalling(iface);
 
   const lines: string[] = [];

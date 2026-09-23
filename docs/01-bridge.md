@@ -252,7 +252,11 @@ C-representability rule the compiler applies to `@export`. A `Str`/`Bytes`
 it separately because the binding does not marshal it. `manifestFromInterface`
 runs the same pass and refuses to build a symbol table from an interface with any
 problem, so a duplicate function name can never silently overwrite the earlier
-symbol. `validateInterface` is the single owner of the C-representability and
+symbol. `generateBinding` delegates validation to `manifestFromInterface` rather
+than running the pass itself, so the normal path validates the interface exactly
+once before applying its generator-specific marshalling checks; a validation
+problem is reported before any marshalling rejection. `validateInterface` is the
+single owner of the C-representability and
 cycle rules: `mapXzTypeToFfi` and `mapTypeToTs` perform structural mapping only
 and assume the interface already passed that pass, so the manifest path and the
 generator cannot disagree about what is representable. The two mapping helpers
