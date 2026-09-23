@@ -102,6 +102,15 @@ test("manifest validation rejects Unit parameters and generics before mapping", 
   );
 });
 
+test("manifest validation rejects transfer of a non-pointer-carrying type", () => {
+  const iface = parseInterface("extern func take(transfer amount: Int) -> Int\n");
+  assert.throws(
+    () => manifestFromInterface(iface, { name: "lib", path: "lib.so", xzVersion: "0.1.0" }),
+    (error: unknown) =>
+      error instanceof BridgeDefinitionError && error.message.includes("pointer-carrying type"),
+  );
+});
+
 test("builds a manifest: mut params become pointers, returns keep their type", () => {
   const iface = parseInterface("extern func parse_amount(text: Str, mut out: Float) -> Int\n");
   const manifest = manifestFromInterface(iface, {

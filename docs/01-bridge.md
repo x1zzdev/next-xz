@@ -246,7 +246,12 @@ more than once for the same reason. It also rejects a `@cstruct` name
 that collides with a built-in type name (`Bool`, `Int`, `usize`, `Float`,
 `Char`, `Str`, `Bytes`, `Ptr`, `Unit`): a reference to that name would silently
 resolve to the primitive and ignore the record, so the collision is a definition
-error. This is the same
+error. It also rejects a `transfer` parameter or return whose type is not
+pointer-carrying (`Str`, `Bytes`, `Ptr`, or a `@cstruct` record with a `Ptr`
+field), the compiler's ownership rule; a scalar has no ownership to transfer, and
+the manifest path would otherwise drop the modifier silently. `mut` and
+`transfer` are already mutually exclusive in the grammar, so no interface the
+parser accepts combines them. This is the same
 C-representability rule the compiler applies to `@export`. A `Str`/`Bytes`
 `@cstruct` field is C-representable and passes this check; the generator rejects
 it separately because the binding does not marshal it. `manifestFromInterface`

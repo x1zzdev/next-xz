@@ -9,7 +9,8 @@ export type InterfaceProblemKind =
   | "unknown"
   | "cycle"
   | "duplicate"
-  | "reserved";
+  | "reserved"
+  | "ownership";
 
 export interface InterfaceProblem {
   readonly kind: InterfaceProblemKind;
@@ -82,9 +83,24 @@ export function validateInterface(iface: Interface): readonly InterfaceProblem[]
     }
     funcNames.add(func.name);
     for (const param of func.params) {
-      checkType(records, param.type, func.name, "param", [param.name], problems);
+      const representable = checkType(records, param.type, func.name, "param", [param.name], problems);
+      if (param.mutable && param.transfer) {
+        problems.push({
+          kind: "ownership",
+          symbol: func.name,
+          position: "param",
+          path: [param.name],
+          type: renderXzType(param.type),
+          reason: "a parameter cannot combine 'mut' and 'transfer'",
+        });
+      } else if (param.transfer && representable) {
+        checkTransfer(records, param.type, func.name, "param", [param.name], problems);
+      }
     }
-    checkType(records, func.returnType, func.name, "return", [], problems);
+    const returnRepresentable = checkType(records, func.returnType, func.name, "return", [], problems);
+    if (func.transferReturn && returnRepresentable) {
+      checkTransfer(records, func.returnType, func.name, "return", [], problems);
+    }
   }
 
   for (const cycle of findCycles(records)) {
@@ -109,6 +125,11 @@ export function formatInterfaceProblem(problem: InterfaceProblem): string {
   if (problem.kind === "duplicate" || problem.kind === "reserved") {
     return `${head}: ${problem.reason}`;
   }
+  if (problem.kind === "ownership") {
+    const location =
+      problem.position === "return" ? "return type" : `parameter '${problem.path.join(".")}'`;
+    return `${head}: ${location} of type '${problem.type}': ${problem.reason}`;
+  }
   const location =
     problem.position === "return"
       ? `return type '${problem.type}'`
@@ -123,7 +144,7 @@ function checkType(
   position: ValidationPosition,
   path: readonly string[],
   problems: InterfaceProblem[],
-): void {
+): boolean {
   if (type.kind === "generic") {
     problems.push({
       kind: "generic",
@@ -133,7 +154,7 @@ function checkType(
       type: renderXzType(type),
       reason: `generic type '${type.name}' has no C declaration`,
     });
-    return;
+    return false;
   }
   if (isPrimitive(type.name)) {
     if (type.name === "Unit" && position !== "return") {
@@ -145,8 +166,9 @@ function checkType(
         type: type.name,
         reason: "Unit is allowed only as a return type",
       });
+      return false;
     }
-    return;
+    return true;
   }
   if (!records.has(type.name)) {
     problems.push({
@@ -157,7 +179,49 @@ function checkType(
       type: type.name,
       reason: `unknown type '${type.name}'; declare it as a @cstruct record or use a C-representable primitive`,
     });
+    return false;
   }
+  return true;
+}
+
+function checkTransfer(
+  records: ReadonlyMap<string, CStruct>,
+  type: XzType,
+  symbol: string,
+  position: ValidationPosition,
+  path: readonly string[],
+  problems: InterfaceProblem[],
+): void {
+  if (isPointerCarrying(type, records)) {
+    return;
+  }
+  problems.push({
+    kind: "ownership",
+    symbol,
+    position,
+    path,
+    type: renderXzType(type),
+    reason: "'transfer' requires a pointer-carrying type (Str, Bytes, Ptr, or a @cstruct with a Ptr field)",
+  });
+}
+
+function isPointerCarrying(
+  type: XzType,
+  records: ReadonlyMap<string, CStruct>,
+  seen: Set<string> = new Set(),
+): boolean {
+  if (type.kind === "generic") {
+    return false;
+  }
+  if (type.name === "Str" || type.name === "Bytes" || type.name === "Ptr") {
+    return true;
+  }
+  const record = records.get(type.name);
+  if (record === undefined || seen.has(type.name)) {
+    return false;
+  }
+  seen.add(type.name);
+  return record.fields.some((field) => isPointerCarrying(field.type, records, seen));
 }
 
 function findCycles(records: ReadonlyMap<string, CStruct>): readonly (readonly string[])[] {
