@@ -82,6 +82,15 @@ test("rejects a transfer parameter that is not a buffer", () => {
   );
 });
 
+test("rejects a transfer return the binding cannot own", () => {
+  const iface = parseInterface("extern func read(path: Str) -> transfer Str\n");
+  assert.throws(
+    () => generateBinding(iface, options),
+    (error: unknown) =>
+      error instanceof BridgeDefinitionError && error.message.includes("transfer"),
+  );
+});
+
 test("rejects a Str field inside a @cstruct record", () => {
   const iface = parseInterface("@cstruct record Name {\n    text: Str\n}\nextern func id(n: Name) -> Name\n");
   assert.throws(() => generateBinding(iface, options), BridgeDefinitionError);

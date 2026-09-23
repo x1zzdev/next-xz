@@ -51,6 +51,17 @@ test("parses transfer params", () => {
   assert.deepEqual(iface.funcs[0]?.params[0]?.type, { kind: "named", name: "Bytes" });
 });
 
+test("parses transfer return", () => {
+  const iface = parseInterface("extern func read(path: Str) -> transfer Str\n");
+  assert.equal(iface.funcs[0]?.transferReturn, true);
+  assert.deepEqual(iface.funcs[0]?.returnType, { kind: "named", name: "Str" });
+});
+
+test("defaults transferReturn to false", () => {
+  const iface = parseInterface("extern func id(n: Int) -> Int\n");
+  assert.equal(iface.funcs[0]?.transferReturn, false);
+});
+
 test("parses generic type arguments as non-C-representable shape", () => {
   const iface = parseInterface("extern func f(x: Result[Int, Int]) -> Int\n");
   assert.deepEqual(iface.funcs[0]?.params[0]?.type, {

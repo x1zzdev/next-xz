@@ -33,6 +33,7 @@ export interface ExternFunc {
   readonly name: string;
   readonly params: readonly Param[];
   readonly returnType: XzType;
+  readonly transferReturn: boolean;
 }
 
 export interface Field {

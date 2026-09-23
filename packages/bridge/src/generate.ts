@@ -54,6 +54,11 @@ function assertGeneratable(
   cstructs: ReadonlyMap<string, CStruct>,
   names: ReadonlySet<string>,
 ): void {
+  if (func.transferReturn) {
+    throw new BridgeDefinitionError(
+      `symbol '${func.name}': return is declared 'transfer'; the generated binding copies the returned buffer and cannot take ownership of it`,
+    );
+  }
   for (const param of func.params) {
     if (param.mutable) {
       throw new BridgeDefinitionError(
