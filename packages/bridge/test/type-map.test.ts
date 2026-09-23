@@ -2,7 +2,6 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import {
-  NotCRepresentableError,
   cstructNames,
   isCRepresentable,
   mapTypeToTs,
@@ -36,20 +35,10 @@ test("treats Unit as return-only", () => {
   assert.equal(isCRepresentable(named("Unit"), empty, "return"), true);
   assert.equal(isCRepresentable(named("Unit"), empty, "param"), false);
   assert.equal(mapTypeToTs(named("Unit"), empty, "return"), "void");
-  assert.throws(() => mapTypeToTs(named("Unit"), empty, "param"), NotCRepresentableError);
 });
 
-test("rejects generic Result/Option/collections", () => {
+test("treats generic Result/Option/collections as non-representable", () => {
   const result: XzType = { kind: "generic", name: "Result", args: [named("Int"), named("Int")] };
   assert.equal(isCRepresentable(result, empty), false);
-  assert.throws(() => mapTypeToTs(result, empty), NotCRepresentableError);
   assert.equal(renderXzType(result), "Result[Int, Int]");
-});
-
-test("rejects an undeclared record type", () => {
-  assert.throws(
-    () => mapTypeToTs(named("Buffer"), empty),
-    (error: unknown) =>
-      error instanceof NotCRepresentableError && error.message.includes("unknown type"),
-  );
 });

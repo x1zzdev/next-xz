@@ -12,16 +12,6 @@ export class XzintParseError extends Error {
   }
 }
 
-export class NotCRepresentableError extends Error {
-  readonly xzType: string;
-
-  constructor(xzType: string, reason: string) {
-    super(`Xz type '${xzType}' is not C-representable: ${reason}`);
-    this.name = "NotCRepresentableError";
-    this.xzType = xzType;
-  }
-}
-
 export class BridgeDefinitionError extends Error {
   constructor(message: string) {
     super(message);

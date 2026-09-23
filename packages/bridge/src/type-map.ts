@@ -1,4 +1,4 @@
-import { NotCRepresentableError } from "./errors.js";
+import { BridgeDefinitionError } from "./errors.js";
 import type { Interface, XzType } from "./xzint/ast.js";
 
 export type PrimitiveName =
@@ -75,30 +75,38 @@ export function isCRepresentable(
   return cstructs.has(type.name);
 }
 
+/**
+ * Maps an already-validated `.xzint` type to its TypeScript type.
+ *
+ * `validateInterface` is the single owner of the C-representability rules.
+ * This function performs structural mapping only and assumes the interface
+ * passed those checks; the throws below mark an internal invariant violation,
+ * not a second copy of the rules.
+ */
 export function mapTypeToTs(
   type: XzType,
   cstructs: ReadonlySet<string>,
   position: TypePosition = "param",
 ): string {
   if (type.kind === "generic") {
-    throw new NotCRepresentableError(
-      renderXzType(type),
-      `generic type '${type.name}' has no C declaration`,
-    );
+    throw unvalidatedMapping(renderXzType(type));
   }
   const primitive = PRIMITIVES.get(type.name);
   if (primitive !== undefined) {
     if (type.name === "Unit" && position !== "return") {
-      throw new NotCRepresentableError("Unit", "Unit is allowed only as a return type");
+      throw unvalidatedMapping("Unit");
     }
     return primitive.ts;
   }
   if (cstructs.has(type.name)) {
     return type.name;
   }
-  throw new NotCRepresentableError(
-    type.name,
-    "unknown type; declare it as a @cstruct record or use a C-representable primitive",
+  throw unvalidatedMapping(type.name);
+}
+
+function unvalidatedMapping(xzType: string): BridgeDefinitionError {
+  return new BridgeDefinitionError(
+    `Cannot map Xz type '${xzType}' to a TypeScript type: the interface must pass validateInterface before mapping`,
   );
 }
 

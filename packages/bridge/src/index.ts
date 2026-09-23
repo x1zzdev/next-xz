@@ -3,7 +3,6 @@ export {
   BridgeRuntimeError,
   BridgeSymbolError,
   BridgeVersionError,
-  NotCRepresentableError,
   XzContractError,
   XzintParseError,
 } from "./errors.js";
