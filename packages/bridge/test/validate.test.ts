@@ -304,6 +304,71 @@ test("rejects a function that releases its own returned buffer", () => {
   assert.match(formatInterfaceProblem(problems[0]!), /cannot release its own/);
 });
 
+test("accepts a contracted wrapper with an error map", () => {
+  const iface = parseInterface(
+    `${EXPORT}@error InvalidAmount = 1\n@error Overflow = 2\nextern func parse(text: Str, mut out: Float) -> Int contract ok 0\n`,
+  );
+  assert.deepEqual(validateInterface(iface), []);
+});
+
+test("rejects a contract return that is not a status code", () => {
+  const problems = validateInterface(
+    parseInterface(`${EXPORT}extern func parse(text: Str, mut out: Float) -> Float contract ok 0\n`),
+  ).filter((problem) => problem.kind === "contract");
+  assert.equal(problems.length, 1);
+  assert.match(formatInterfaceProblem(problems[0]!), /must return an Int or usize/);
+});
+
+test("rejects a contract without exactly one mut out-parameter", () => {
+  const none = validateInterface(
+    parseInterface(`${EXPORT}extern func parse(text: Str) -> Int contract ok 0\n`),
+  ).filter((problem) => problem.kind === "contract");
+  assert.equal(none.length, 1);
+  assert.match(formatInterfaceProblem(none[0]!), /exactly one 'mut' out-parameter/);
+
+  const two = validateInterface(
+    parseInterface(
+      `${EXPORT}extern func parse(mut a: Float, mut b: Float) -> Int contract ok 0\n`,
+    ),
+  ).filter((problem) => problem.kind === "contract");
+  assert.equal(two.length, 1);
+});
+
+test("rejects a duplicate @error name or code", () => {
+  const byName = validateInterface(
+    parseInterface(`${EXPORT}@error Bad = 1\n@error Bad = 2\n`),
+  ).filter((problem) => problem.kind === "contract");
+  assert.equal(byName.length, 1);
+  assert.match(formatInterfaceProblem(byName[0]!), /name is declared more than once/);
+
+  const byCode = validateInterface(
+    parseInterface(`${EXPORT}@error Bad = 1\n@error Worse = 1\n`),
+  ).filter((problem) => problem.kind === "contract");
+  assert.equal(byCode.length, 1);
+  assert.match(formatInterfaceProblem(byCode[0]!), /code 1 is declared more than once/);
+});
+
+test("rejects an ok code that is also declared as an @error code", () => {
+  const problems = validateInterface(
+    parseInterface(
+      `${EXPORT}@error InvalidAmount = 1\nextern func parse(mut out: Float) -> Int contract ok 1\n`,
+    ),
+  ).filter((problem) => problem.kind === "contract");
+  assert.equal(problems.length, 1);
+  assert.match(formatInterfaceProblem(problems[0]!), /also declared as an @error code/);
+});
+
+test("rejects a contract status return declared transfer", () => {
+  const problems = validateInterface(
+    parseInterface(
+      `${FOREIGN}extern func free(ptr: Ptr) -> Unit\nextern func parse(mut out: Float) -> transfer Ptr release free contract ok 0\n`,
+    ),
+  ).filter((problem) => problem.kind === "contract");
+  assert.ok(
+    problems.some((problem) => /cannot also be 'transfer'/.test(formatInterfaceProblem(problem))),
+  );
+});
+
 test("rejects a parameter that combines mut and transfer", () => {
   const iface: Interface = {
     kind: "foreign",

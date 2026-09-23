@@ -11,7 +11,8 @@ export type InterfaceProblemKind =
   | "duplicate"
   | "reserved"
   | "ownership"
-  | "release";
+  | "release"
+  | "contract";
 
 export interface InterfaceProblem {
   readonly kind: InterfaceProblemKind;
@@ -62,6 +63,35 @@ export function validateInterface(iface: Interface): readonly InterfaceProblem[]
   for (const cstruct of records.values()) {
     for (const field of cstruct.fields) {
       checkType(records, field.type, cstruct.name, "field", [field.name], problems);
+    }
+  }
+
+  const errorNames = new Set<string>();
+  const errorCodes = new Set<number>();
+  for (const error of iface.errors) {
+    if (errorNames.has(error.name)) {
+      problems.push({
+        kind: "contract",
+        symbol: error.name,
+        position: "declaration",
+        path: [],
+        type: String(error.code),
+        reason: "@error name is declared more than once",
+      });
+    } else {
+      errorNames.add(error.name);
+    }
+    if (errorCodes.has(error.code)) {
+      problems.push({
+        kind: "contract",
+        symbol: error.name,
+        position: "declaration",
+        path: [],
+        type: String(error.code),
+        reason: `@error code ${error.code} is declared more than once`,
+      });
+    } else {
+      errorCodes.add(error.code);
     }
   }
 
@@ -140,6 +170,10 @@ export function validateInterface(iface: Interface): readonly InterfaceProblem[]
     }
   }
 
+  for (const func of firstFuncs.values()) {
+    checkContract(func, errorCodes, problems);
+  }
+
   for (const cycle of findCycles(records)) {
     problems.push({
       kind: "cycle",
@@ -168,6 +202,9 @@ export function formatInterfaceProblem(problem: InterfaceProblem): string {
     return `${head}: ${location} of type '${problem.type}': ${problem.reason}`;
   }
   if (problem.kind === "release") {
+    return `${head}: ${problem.reason}`;
+  }
+  if (problem.kind === "contract") {
     return `${head}: ${problem.reason}`;
   }
   const location =
@@ -312,6 +349,62 @@ function checkRelease(
       reason: `release symbol '${func.release}' must be declared as 'func(ptr: Ptr) -> Unit' with one borrowed pointer parameter`,
     });
   }
+}
+
+function checkContract(
+  func: ExternFunc,
+  errorCodes: ReadonlySet<number>,
+  problems: InterfaceProblem[],
+): void {
+  const contract = func.contract;
+  if (contract === undefined) {
+    return;
+  }
+  if (func.transferReturn) {
+    problems.push({
+      kind: "contract",
+      symbol: func.name,
+      position: "return",
+      path: [],
+      type: renderXzType(func.returnType),
+      reason: "a contract status return cannot also be 'transfer'",
+    });
+  }
+  if (!isStatusType(func.returnType)) {
+    problems.push({
+      kind: "contract",
+      symbol: func.name,
+      position: "return",
+      path: [],
+      type: renderXzType(func.returnType),
+      reason: "a contracted wrapper must return an Int or usize status code",
+    });
+  }
+  const outParams = func.params.filter((param) => param.mutable);
+  if (outParams.length !== 1) {
+    problems.push({
+      kind: "contract",
+      symbol: func.name,
+      position: "param",
+      path: outParams.map((param) => param.name),
+      type: renderXzType(func.returnType),
+      reason: `a contracted wrapper must declare exactly one 'mut' out-parameter; found ${outParams.length}`,
+    });
+  }
+  if (errorCodes.has(contract.okCode)) {
+    problems.push({
+      kind: "contract",
+      symbol: func.name,
+      position: "return",
+      path: [],
+      type: String(contract.okCode),
+      reason: `the ok code ${contract.okCode} is also declared as an @error code`,
+    });
+  }
+}
+
+function isStatusType(type: XzType): boolean {
+  return type.kind === "named" && (type.name === "Int" || type.name === "usize");
 }
 
 function isReleaseSignature(release: ExternFunc): boolean {
