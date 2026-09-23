@@ -152,6 +152,46 @@ test("records a transfer return's release symbol in the manifest", () => {
   assert.equal(manifest.symbols["free"]?.release, undefined);
 });
 
+test("records a contract descriptor in the manifest", () => {
+  const iface = parseInterface(
+    `${EXPORT}@error InvalidAmount = 1\n@error Overflow = 2\nextern func parse(text: Str, mut out: Float) -> Int contract ok 0\n`,
+  );
+  const manifest = manifestFromInterface(iface, {
+    name: "liborder",
+    path: ".next-xz/liborder.so",
+    xzVersion: "0.1.0",
+  });
+  assert.deepEqual(manifest.symbols["parse"], {
+    args: [
+      {
+        kind: "struct",
+        name: "XzStr",
+        fields: [
+          { name: "ptr", type: "ptr" },
+          { name: "len", type: "uint64" },
+        ],
+      },
+      "ptr",
+    ],
+    returns: "int64",
+    contract: {
+      okCode: 0,
+      outParam: "out",
+      errorNames: { 1: "InvalidAmount", 2: "Overflow" },
+    },
+  });
+});
+
+test("omits the error map when no @error is declared", () => {
+  const iface = parseInterface(`${EXPORT}extern func parse(mut out: Int) -> Int contract ok 0\n`);
+  const manifest = manifestFromInterface(iface, {
+    name: "lib",
+    path: "lib.so",
+    xzVersion: "0.1.0",
+  });
+  assert.deepEqual(manifest.symbols["parse"]?.contract, { okCode: 0, outParam: "out" });
+});
+
 test("maps only a validated type: an unvalidated call throws the internal invariant", () => {
   const invariant = (error: unknown) =>
     error instanceof BridgeDefinitionError &&

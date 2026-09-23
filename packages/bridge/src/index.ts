@@ -43,7 +43,7 @@ export type { InterfaceProblem, InterfaceProblemKind, ValidationPosition } from 
 export { mapXzTypeToFfi } from "./ffi/types.js";
 export type { FfiScalar, FfiStruct, FfiStructField, FfiType } from "./ffi/types.js";
 export { manifestFromInterface } from "./ffi/manifest.js";
-export type { LibraryManifest, ManifestInput, SymbolDefinition } from "./ffi/manifest.js";
+export type { LibraryManifest, ManifestInput, SymbolContract, SymbolDefinition } from "./ffi/manifest.js";
 export { measure, percentile, systemClock } from "./bench/stats.js";
 export type { Clock, LatencyStats, MeasureOptions } from "./bench/stats.js";
 export {
