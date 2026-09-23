@@ -37,6 +37,8 @@ export {
   renderXzType,
 } from "./type-map.js";
 export type { PrimitiveMapping, PrimitiveName, TypePosition } from "./type-map.js";
+export { formatInterfaceProblem, validateInterface } from "./validate.js";
+export type { InterfaceProblem, InterfaceProblemKind, ValidationPosition } from "./validate.js";
 export { mapXzTypeToFfi } from "./ffi/types.js";
 export type { FfiScalar, FfiStruct, FfiStructField, FfiType } from "./ffi/types.js";
 export { manifestFromInterface } from "./ffi/manifest.js";
