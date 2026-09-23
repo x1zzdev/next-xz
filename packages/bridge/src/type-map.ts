@@ -23,8 +23,8 @@ export interface PrimitiveMapping {
 
 export const PRIMITIVE_MAP: readonly PrimitiveMapping[] = [
   { xz: "Bool", c: "bool", ts: "boolean" },
-  { xz: "Int", c: "int64_t", ts: "number", note: "bigint for values beyond 2^53" },
-  { xz: "usize", c: "uint64_t", ts: "number", note: "bigint for values beyond 2^53" },
+  { xz: "Int", c: "int64_t", ts: "bigint", note: "64-bit; number cannot hold it exactly above 2^53" },
+  { xz: "usize", c: "uint64_t", ts: "bigint", note: "64-bit; number cannot hold it exactly above 2^53" },
   { xz: "Float", c: "double", ts: "number" },
   { xz: "Char", c: "char", ts: "string", note: "single-character string" },
   {

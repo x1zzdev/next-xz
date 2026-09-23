@@ -8,8 +8,8 @@ const empty = new Set<string>();
 
 test("maps C-representable scalars per ARCHITECTURE section 3", () => {
   assert.equal(mapTypeToTs(named("Bool"), empty), "boolean");
-  assert.equal(mapTypeToTs(named("Int"), empty), "number");
-  assert.equal(mapTypeToTs(named("usize"), empty), "number");
+  assert.equal(mapTypeToTs(named("Int"), empty), "bigint");
+  assert.equal(mapTypeToTs(named("usize"), empty), "bigint");
   assert.equal(mapTypeToTs(named("Float"), empty), "number");
   assert.equal(mapTypeToTs(named("Char"), empty), "string");
   assert.equal(mapTypeToTs(named("Str"), empty), "string");

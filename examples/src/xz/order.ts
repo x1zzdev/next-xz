@@ -2,7 +2,7 @@
 import { loadLibrary, loadPlatformLibrary, type FfiBackend, type LibraryManifest, type LoadedLibrary } from "@xz-lang/bridge";
 
 export interface LineItem {
-  quantity: number;
+  quantity: bigint;
   unit_price: number;
 }
 

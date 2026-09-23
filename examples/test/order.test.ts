@@ -29,7 +29,7 @@ test("order.xzint and order.xz declare the same exports", async () => {
 test("the generated binding calls each symbol through the injected backend", async () => {
   const module = (await import(join(root, "src", "xz", "order.ts"))) as {
     bind(backend: FfiBackend): {
-      line_total(item: { quantity: number; unit_price: number }): number;
+      line_total(item: { quantity: bigint; unit_price: number }): number;
       payable_total(subtotal: number, tax_rate: number): number;
       close(): void;
     };
@@ -42,8 +42,8 @@ test("the generated binding calls each symbol through the injected backend", asy
       symbols: {
         line_total: (item: unknown) => {
           calls.push([item]);
-          const value = item as { quantity: number; unit_price: number };
-          return value.quantity * value.unit_price;
+          const value = item as { quantity: bigint; unit_price: number };
+          return Number(value.quantity) * value.unit_price;
         },
         payable_total: (subtotal: unknown, taxRate: unknown) => {
           calls.push([subtotal, taxRate]);
@@ -57,9 +57,9 @@ test("the generated binding calls each symbol through the injected backend", asy
   };
 
   const binding = module.bind(backend);
-  assert.equal(binding.line_total({ quantity: 3, unit_price: 2.5 }), 7.5);
+  assert.equal(binding.line_total({ quantity: 3n, unit_price: 2.5 }), 7.5);
   assert.equal(binding.payable_total(7.5, 0.1), 8.25);
-  assert.deepEqual(calls, [[{ quantity: 3, unit_price: 2.5 }], [7.5, 0.1]]);
+  assert.deepEqual(calls, [[{ quantity: 3n, unit_price: 2.5 }], [7.5, 0.1]]);
   binding.close();
   assert.equal(closed, true);
 });

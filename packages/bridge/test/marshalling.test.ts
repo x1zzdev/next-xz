@@ -3,11 +3,36 @@ import { test } from "node:test";
 
 import {
   BridgeRuntimeError,
+  asXzInt,
   decodeBytes,
   decodeStr,
   encodeBytes,
   encodeStr,
 } from "../src/index.js";
+
+test("asXzInt returns a bigint unchanged", () => {
+  assert.equal(asXzInt(9007199254740993n), 9007199254740993n);
+});
+
+test("asXzInt widens a safe-integer backend number exactly", () => {
+  assert.equal(asXzInt(42), 42n);
+  assert.equal(asXzInt(Number.MAX_SAFE_INTEGER), BigInt(Number.MAX_SAFE_INTEGER));
+});
+
+test("asXzInt rejects a number beyond the safe-integer range", () => {
+  assert.throws(
+    () => asXzInt(2 ** 53),
+    (error: unknown) =>
+      error instanceof BridgeRuntimeError && error.message.includes("64-bit integer"),
+  );
+});
+
+test("asXzInt rejects a non-integer number", () => {
+  assert.throws(
+    () => asXzInt(1.5),
+    (error: unknown) => error instanceof BridgeRuntimeError,
+  );
+});
 
 test("encodeStr writes UTF-8 bytes and reports their length", () => {
   const value = encodeStr("héllo");

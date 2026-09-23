@@ -11,8 +11,8 @@ function fakeBackend(): FfiBackend {
     dlopen: () => ({
       symbols: {
         line_total: (item: unknown) => {
-          const value = item as { quantity: number; unit_price: number };
-          return value.quantity * value.unit_price;
+          const value = item as { quantity: bigint; unit_price: number };
+          return Number(value.quantity) * value.unit_price;
         },
         payable_total: (subtotal: unknown, taxRate: unknown) =>
           (subtotal as number) * (1 + (taxRate as number)),
@@ -23,7 +23,7 @@ function fakeBackend(): FfiBackend {
 }
 
 test("native implementations match the Xz bodies", () => {
-  assert.equal(nativeLineTotal({ quantity: 3, unit_price: 2.5 }), 7.5);
+  assert.equal(nativeLineTotal({ quantity: 3n, unit_price: 2.5 }), 7.5);
   assert.equal(nativePayableTotal(7.5, 0.1), 8.25);
 });
 

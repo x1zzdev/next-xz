@@ -15,7 +15,7 @@ export const BENCH_ITERATIONS = 100_000;
 export const BENCH_WARMUP = 10_000;
 
 export function nativeLineTotal(item: LineItem): number {
-  return item.quantity * item.unit_price;
+  return Number(item.quantity) * item.unit_price;
 }
 
 export function nativePayableTotal(subtotal: number, taxRate: number): number {
@@ -23,7 +23,7 @@ export function nativePayableTotal(subtotal: number, taxRate: number): number {
 }
 
 export function orderBenchmarks(binding: Binding): BenchmarkCase[] {
-  const item: LineItem = { quantity: 3, unit_price: 2.5 };
+  const item: LineItem = { quantity: 3n, unit_price: 2.5 };
   return [
     {
       name: "line_total(LineItem) -> Float",

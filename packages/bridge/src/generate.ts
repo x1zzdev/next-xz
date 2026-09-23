@@ -145,6 +145,7 @@ interface MarshallingNeeds {
   decodeStr: boolean;
   decodeBytes: boolean;
   pointerValue: boolean;
+  asXzInt: boolean;
 }
 
 function collectMarshalling(iface: Interface): MarshallingNeeds {
@@ -154,11 +155,13 @@ function collectMarshalling(iface: Interface): MarshallingNeeds {
     decodeStr: false,
     decodeBytes: false,
     pointerValue: false,
+    asXzInt: false,
   };
   for (const func of iface.funcs) {
     for (const param of func.params) {
       if (isNamed(param.type, "Str")) needs.encodeStr = true;
       if (isNamed(param.type, "Bytes")) needs.encodeBytes = true;
+      if (isIntType(param.type)) needs.asXzInt = true;
     }
     if (isNamed(func.returnType, "Str")) {
       needs.decodeStr = true;
@@ -168,6 +171,7 @@ function collectMarshalling(iface: Interface): MarshallingNeeds {
       needs.decodeBytes = true;
       needs.pointerValue = true;
     }
+    if (isIntType(func.returnType)) needs.asXzInt = true;
   }
   return needs;
 }
@@ -176,12 +180,17 @@ function isNamed(type: XzType, name: string): boolean {
   return type.kind === "named" && type.name === name;
 }
 
+function isIntType(type: XzType): boolean {
+  return isNamed(type, "Int") || isNamed(type, "usize");
+}
+
 function emitImport(needs: MarshallingNeeds, module: string): string {
   const values = ["loadLibrary", "loadPlatformLibrary"];
   if (needs.encodeStr) values.push("encodeStr");
   if (needs.encodeBytes) values.push("encodeBytes");
   if (needs.decodeStr) values.push("decodeStr");
   if (needs.decodeBytes) values.push("decodeBytes");
+  if (needs.asXzInt) values.push("asXzInt");
   const types = ["type FfiBackend", "type LibraryManifest", "type LoadedLibrary"];
   if (needs.pointerValue) types.push("type XzPointerValue");
   return `import { ${[...values, ...types].join(", ")} } from ${JSON.stringify(module)};`;
@@ -216,6 +225,8 @@ function emitBindFunction(iface: Interface, names: ReadonlySet<string>): string[
       lines.push(`      return decodeBytes(${call} as XzPointerValue);`);
     } else if (isNamed(func.returnType, "Unit")) {
       lines.push(`      ${call};`);
+    } else if (isIntType(func.returnType)) {
+      lines.push(`      return asXzInt(${call});`);
     } else {
       const returnTs = mapTypeToTs(func.returnType, names, "return");
       lines.push(`      return ${call} as ${returnTs};`);
@@ -236,6 +247,9 @@ function emitArgument(param: Param): string {
   }
   if (isNamed(param.type, "Bytes")) {
     return `encodeBytes(${param.name})`;
+  }
+  if (isIntType(param.type)) {
+    return `asXzInt(${param.name})`;
   }
   return param.name;
 }

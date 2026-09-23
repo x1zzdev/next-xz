@@ -8,6 +8,43 @@ export interface XzPointerValue {
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
 
+/**
+ * Normalizes a value crossing the ABI as an Xz `Int`/`usize` into the exact
+ * `bigint` the binding promises.
+ *
+ * The 64-bit ABI range cannot be held by a JavaScript `number` above 2^53, so
+ * the binding never accepts an unsafe number: a safe-integer number (a backend
+ * that returns small 64-bit values as `number`) is widened exactly, and any
+ * other value is a hard error rather than a lossy cast.
+ */
+export function asXzInt(value: unknown): bigint {
+  if (typeof value === "bigint") {
+    return value;
+  }
+  if (typeof value === "number" && Number.isSafeInteger(value)) {
+    return BigInt(value);
+  }
+  throw new BridgeRuntimeError(
+    `expected a 64-bit integer (bigint, or a safe-integer number from the FFI backend), received ${describe(value)}`,
+  );
+}
+
+function describe(value: unknown): string {
+  if (typeof value === "bigint") {
+    return `${value}n`;
+  }
+  if (typeof value === "number" || typeof value === "boolean") {
+    return String(value);
+  }
+  if (typeof value === "string") {
+    return JSON.stringify(value);
+  }
+  if (value === null) {
+    return "null";
+  }
+  return typeof value;
+}
+
 export function encodeStr(value: string): XzPointerValue {
   const bytes = encoder.encode(value);
   return { ptr: bytes, len: bytes.length };

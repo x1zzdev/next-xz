@@ -25,7 +25,7 @@ test("emits a TypeScript interface per @cstruct with declaration order", () => {
     "@cstruct record Point {\n    x: Int\n    y: Int\n}\n@cstruct record Line {\n    a: Point\n    b: Point\n}\n",
   );
   const source = generateBinding(iface, options);
-  assert.match(source, /export interface Point \{\n  x: number;\n  y: number;\n\}/);
+  assert.match(source, /export interface Point \{\n  x: bigint;\n  y: bigint;\n\}/);
   assert.match(source, /export interface Line \{\n  a: Point;\n  b: Point;\n\}/);
 });
 
@@ -59,8 +59,8 @@ test("emits encode/decode calls for Str and Bytes parameters and returns", () =>
   const source = generateBinding(iface, options);
   assert.match(source, /import \{[^}]*encodeStr[^}]*\} from "@xz-lang\/bridge"/);
   assert.match(source, /import \{[^}]*type XzPointerValue[^}]*\} from "@xz-lang\/bridge"/);
-  assert.match(source, /return symbols\["parse"\]!\(encodeStr\(text\)\) as number;/);
-  assert.match(source, /return decodeStr\(symbols\["name"\]!\(id\) as XzPointerValue\);/);
+  assert.match(source, /return asXzInt\(symbols\["parse"\]!\(encodeStr\(text\)\)\);/);
+  assert.match(source, /return decodeStr\(symbols\["name"\]!\(asXzInt\(id\)\) as XzPointerValue\);/);
   assert.match(source, /return decodeBytes\(symbols\["raw"\]!\(\) as XzPointerValue\);/);
 });
 
@@ -156,9 +156,41 @@ test("casts each symbol call to the declared TypeScript return type", () => {
     "@cstruct record Vec2 {\n    x: Int\n    y: Int\n}\nextern func add(a: Int, b: Int) -> Int\nextern func sum(v: Vec2) -> Int\nextern func run() -> Unit\n",
   );
   const source = generateBinding(iface, options);
-  assert.match(source, /return symbols\["add"\]!\(a, b\) as number;/);
-  assert.match(source, /return symbols\["sum"\]!\(v\) as number;/);
+  assert.match(source, /return asXzInt\(symbols\["add"\]!\(asXzInt\(a\), asXzInt\(b\)\)\);/);
+  assert.match(source, /return asXzInt\(symbols\["sum"\]!\(v\)\);/);
   assert.match(source, /symbols\["run"\]!\(\);/);
+});
+
+test("wraps Int/usize parameters and returns in asXzInt", async () => {
+  const iface = parseInterface("extern func echo(n: Int) -> usize\n");
+  const source = generateBinding(iface, options);
+  assert.match(source, /import \{[^}]*asXzInt[^}]*\} from "@xz-lang\/bridge"/);
+  assert.match(source, /return asXzInt\(symbols\["echo"\]!\(asXzInt\(n\)\)\);/);
+
+  const dir = await mkdtemp(join(tmpdir(), "next-xz-gen-"));
+  try {
+    const file = join(dir, "liborder.ts");
+    await writeFile(file, generateBinding(iface, { ...options, importFrom: bridgeEntry }), "utf8");
+
+    const module = (await import(pathToFileURL(file).href)) as {
+      bind(backend: FfiBackend): {
+        echo(n: bigint): bigint;
+        close(): void;
+      };
+    };
+    const backend: FfiBackend = {
+      dlopen: () => ({
+        symbols: { echo: (n: unknown) => n },
+        close: () => {},
+      }),
+    };
+
+    const binding = module.bind(backend);
+    assert.equal(binding.echo(9007199254740993n), 9007199254740993n);
+    binding.close();
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
 });
 
 test("generated module loads, calls a symbol, and closes through an injected backend", async () => {
@@ -172,7 +204,7 @@ test("generated module loads, calls a symbol, and closes through an injected bac
 
     const module = (await import(pathToFileURL(file).href)) as {
       bind(backend: FfiBackend): {
-        add(a: number, b: number): number;
+        add(a: bigint, b: bigint): bigint;
         noop(): void;
         close(): void;
       };
@@ -185,7 +217,7 @@ test("generated module loads, calls a symbol, and closes through an injected bac
         symbols: {
           add: (a: unknown, b: unknown) => {
             calls.push([a, b]);
-            return (a as number) + (b as number);
+            return (a as bigint) + (b as bigint);
           },
           noop: () => {
             calls.push([]);
@@ -199,9 +231,9 @@ test("generated module loads, calls a symbol, and closes through an injected bac
     };
 
     const binding = module.bind(backend);
-    assert.equal(binding.add(2, 3), 5);
+    assert.equal(binding.add(2n, 3n), 5n);
     binding.noop();
-    assert.deepEqual(calls, [[2, 3], []]);
+    assert.deepEqual(calls, [[2n, 3n], []]);
     binding.close();
     assert.equal(closed, true);
   } finally {
@@ -222,7 +254,7 @@ test("generated module marshals Str/Bytes through the injected backend", async (
 
     const module = (await import(pathToFileURL(file).href)) as {
       bind(backend: FfiBackend): {
-        hash(data: Uint8Array): number;
+        hash(data: Uint8Array): bigint;
         greet(name: string): string;
         close(): void;
       };
@@ -247,7 +279,7 @@ test("generated module marshals Str/Bytes through the injected backend", async (
 
     const binding = module.bind(backend);
     const borrowed = new Uint8Array([1, 2, 3]);
-    assert.equal(binding.hash(borrowed), 3);
+    assert.equal(binding.hash(borrowed), 3n);
     assert.equal(seen[0]?.ptr, borrowed);
 
     assert.equal(binding.greet("héllo"), "hello");
