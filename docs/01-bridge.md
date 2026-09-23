@@ -255,9 +255,12 @@ problem, so a duplicate function name can never silently overwrite the earlier
 symbol. `validateInterface` is the single owner of the C-representability and
 cycle rules: `mapXzTypeToFfi` and `mapTypeToTs` perform structural mapping only
 and assume the interface already passed that pass, so the manifest path and the
-generator cannot disagree about what is representable. A mapping helper that is
-called without validation throws `BridgeDefinitionError` as an internal
-invariant violation, not a rule message. No standalone per-type
+generator cannot disagree about what is representable. The two mapping helpers
+stay public as structural utilities (they mirror each other), but a direct call
+is unsupported: the validated entry points are `manifestFromInterface` and
+`generateBinding`. A mapping helper that is called without validation throws
+`BridgeDefinitionError` as an internal invariant violation, not a rule message;
+the FFI helper's contract is pinned by tests. No standalone per-type
 representability predicate is exported; a caller that needs to know whether a
 declaration is C-representable reads the `validateInterface` problem list
 instead of re-deriving the rule.

@@ -49,7 +49,14 @@ const PRIMITIVE_FFI: Readonly<Record<PrimitiveName, FfiType>> = {
  * `validateInterface` is the single owner of the C-representability and cycle
  * rules. This function performs structural mapping only and assumes the
  * interface passed those checks; the throws below mark an internal invariant
- * violation, not a second copy of the rules.
+ * violation, not a second copy of the rules. It stays a public structural
+ * helper for parity with `mapTypeToTs`; the supported entry points are
+ * `manifestFromInterface` and `generateBinding`, which validate first. Calling
+ * it on an unvalidated type throws `BridgeDefinitionError` with the internal
+ * invariant message.
+ *
+ * @throws {BridgeDefinitionError} if the type was not validated first (generic,
+ * `Unit` outside a return, unknown name, or a record cycle)
  */
 export function mapXzTypeToFfi(
   type: XzType,

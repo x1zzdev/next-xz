@@ -126,6 +126,18 @@ test("builds a manifest: mut params become pointers, returns keep their type", (
   });
 });
 
+test("maps only a validated type: an unvalidated call throws the internal invariant", () => {
+  const invariant = (error: unknown) =>
+    error instanceof BridgeDefinitionError &&
+    error.message.includes("must pass validateInterface before mapping");
+  assert.throws(() => mapXzTypeToFfi(named("Missing"), noStructs), invariant);
+  assert.throws(() => mapXzTypeToFfi(named("Unit"), noStructs), invariant);
+  assert.throws(
+    () => mapXzTypeToFfi({ kind: "generic", name: "Result", args: [] }, noStructs),
+    invariant,
+  );
+});
+
 test("rejects a duplicate symbol in the interface", () => {
   const iface = parseInterface("extern func f() -> Int\nextern func f() -> Int\n");
   assert.throws(
