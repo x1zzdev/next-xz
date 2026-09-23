@@ -253,9 +253,11 @@ it separately because the binding does not marshal it. `manifestFromInterface`
 runs the same pass and refuses to build a symbol table from an interface with any
 problem, so a duplicate function name can never silently overwrite the earlier
 symbol. `validateInterface` is the single owner of the C-representability and
-cycle rules: `mapXzTypeToFfi` performs structural mapping only and assumes the
-interface already passed that pass, so the manifest path and the generator cannot
-disagree about what is representable.
+cycle rules: `mapXzTypeToFfi` and `mapTypeToTs` perform structural mapping only
+and assume the interface already passed that pass, so the manifest path and the
+generator cannot disagree about what is representable. A mapping helper that is
+called without validation throws `BridgeDefinitionError` as an internal
+invariant violation, not a rule message.
 
 ## 7. Performance budget
 
