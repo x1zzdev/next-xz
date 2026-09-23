@@ -57,6 +57,8 @@ export type {
 } from "./bench/compare.js";
 export { loadLibrary } from "./loader/load.js";
 export type { LoadOptions, LoadedLibrary } from "./loader/load.js";
+export { detectPlatform, loadPlatformLibrary } from "./loader/platform.js";
+export type { PlatformGlobals, RuntimePlatform } from "./loader/platform.js";
 export type { FfiBackend, FfiLibrary } from "./loader/ffi-backend.js";
 export { BunFfiBackend, loadBunBackend, loadBunLibrary } from "./loader/bun.js";
 export type { BunFfiFunction, BunFfiLibrary, BunFfiModule } from "./loader/bun.js";

@@ -77,6 +77,13 @@ The loader:
 A version mismatch throws `BridgeVersionError`. A missing symbol throws
 `BridgeSymbolError`. Both are actionable, not silent.
 
+`loadBunLibrary` and `loadNodeLibrary` pin a backend explicitly.
+`loadPlatformLibrary` selects one at runtime instead: it picks the `bun:ffi`
+backend when a `Bun` global is present and the koffi backend otherwise, so the
+same generated module loads on either runtime without the caller supplying a
+backend (§6). The backend is the only thing that varies per platform; the
+returned `LoadedLibrary` is identical.
+
 ### 3.1 Library metadata
 
 The loader consumes a `LibraryManifest`: the shared-object path, the Xz compiler
