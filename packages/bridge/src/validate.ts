@@ -1,5 +1,5 @@
 import { isPrimitive, renderXzType } from "./type-map.js";
-import type { CStruct, Interface, XzType } from "./xzint/ast.js";
+import type { CStruct, ExternFunc, Interface, XzType } from "./xzint/ast.js";
 
 export type ValidationPosition = "param" | "return" | "field" | "declaration";
 
@@ -10,7 +10,8 @@ export type InterfaceProblemKind =
   | "cycle"
   | "duplicate"
   | "reserved"
-  | "ownership";
+  | "ownership"
+  | "release";
 
 export interface InterfaceProblem {
   readonly kind: InterfaceProblemKind;
@@ -66,6 +67,7 @@ export function validateInterface(iface: Interface): readonly InterfaceProblem[]
 
   const funcNames = new Set<string>();
   const seenFuncDuplicates = new Set<string>();
+  const firstFuncs = new Map<string, ExternFunc>();
   for (const func of iface.funcs) {
     if (funcNames.has(func.name)) {
       if (!seenFuncDuplicates.has(func.name)) {
@@ -82,6 +84,7 @@ export function validateInterface(iface: Interface): readonly InterfaceProblem[]
       continue;
     }
     funcNames.add(func.name);
+    firstFuncs.set(func.name, func);
     for (const param of func.params) {
       checkType(records, param.type, func.name, "param", [param.name], problems);
       if (param.transfer) {
@@ -100,6 +103,10 @@ export function validateInterface(iface: Interface): readonly InterfaceProblem[]
     if (func.transferReturn && returnRepresentable) {
       checkTransfer(records, func.returnType, func.name, "return", [], problems);
     }
+  }
+
+  for (const func of firstFuncs.values()) {
+    checkRelease(firstFuncs, records, func, problems);
   }
 
   for (const cycle of findCycles(records)) {
@@ -128,6 +135,9 @@ export function formatInterfaceProblem(problem: InterfaceProblem): string {
     const location =
       problem.position === "return" ? "return type" : `parameter '${problem.path.join(".")}'`;
     return `${head}: ${location} of type '${problem.type}': ${problem.reason}`;
+  }
+  if (problem.kind === "release") {
+    return `${head}: ${problem.reason}`;
   }
   const location =
     problem.position === "return"
@@ -202,6 +212,90 @@ function checkTransfer(
     type: renderXzType(type),
     reason: "'transfer' requires a pointer-carrying type (Str, Bytes, Ptr, or a @cstruct with a Ptr field)",
   });
+}
+
+function checkRelease(
+  funcs: ReadonlyMap<string, ExternFunc>,
+  records: ReadonlyMap<string, CStruct>,
+  func: ExternFunc,
+  problems: InterfaceProblem[],
+): void {
+  if (!func.transferReturn) {
+    if (func.release !== undefined) {
+      problems.push({
+        kind: "release",
+        symbol: func.name,
+        position: "return",
+        path: [],
+        type: renderXzType(func.returnType),
+        reason: "'release' names a deallocator for a 'transfer' return, but this return is not 'transfer'",
+      });
+    }
+    return;
+  }
+  if (!isPointerCarrying(func.returnType, records)) {
+    return;
+  }
+  if (func.release === undefined) {
+    problems.push({
+      kind: "release",
+      symbol: func.name,
+      position: "return",
+      path: [],
+      type: renderXzType(func.returnType),
+      reason:
+        "a 'transfer' return must declare its deallocator with 'release <symbol>' so the binding can free the buffer",
+    });
+    return;
+  }
+  if (func.release === func.name) {
+    problems.push({
+      kind: "release",
+      symbol: func.name,
+      position: "return",
+      path: [],
+      type: func.release,
+      reason: "a function cannot release its own returned buffer",
+    });
+    return;
+  }
+  const release = funcs.get(func.release);
+  if (release === undefined) {
+    problems.push({
+      kind: "release",
+      symbol: func.name,
+      position: "return",
+      path: [],
+      type: func.release,
+      reason: `'release' names '${func.release}', which is not an 'extern func' declared in this interface`,
+    });
+    return;
+  }
+  if (!isReleaseSignature(release)) {
+    problems.push({
+      kind: "release",
+      symbol: func.name,
+      position: "return",
+      path: [],
+      type: func.release,
+      reason: `release symbol '${func.release}' must be declared as 'func(ptr: Ptr) -> Unit' with one borrowed pointer parameter`,
+    });
+  }
+}
+
+function isReleaseSignature(release: ExternFunc): boolean {
+  if (release.params.length !== 1) {
+    return false;
+  }
+  const param = release.params[0]!;
+  return (
+    !param.mutable &&
+    !param.transfer &&
+    param.type.kind === "named" &&
+    param.type.name === "Ptr" &&
+    release.returnType.kind === "named" &&
+    release.returnType.name === "Unit"
+  );
 }
 
 function isPointerCarrying(

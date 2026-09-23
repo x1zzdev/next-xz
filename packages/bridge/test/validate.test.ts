@@ -183,6 +183,65 @@ test("flags a transfer return that is not pointer-carrying", () => {
   assert.match(formatInterfaceProblem(problems[0]!), /return type of type 'Int'/);
 });
 
+test("accepts a transfer return with a declared Ptr release symbol", () => {
+  const iface = parseInterface(
+    [
+      "extern func free(ptr: Ptr) -> Unit",
+      "extern func strdup(s: Str) -> transfer Str release free",
+      "extern func read(p: Str) -> transfer Bytes release free",
+    ].join("\n"),
+  );
+  assert.deepEqual(validateInterface(iface), []);
+});
+
+test("flags a transfer return without a release symbol", () => {
+  const iface = parseInterface("extern func read(path: Str) -> transfer Str\n");
+  const problems = validateInterface(iface);
+  assert.equal(problems.length, 1);
+  assert.equal(problems[0]?.kind, "release");
+  assert.equal(problems[0]?.position, "return");
+  assert.match(formatInterfaceProblem(problems[0]!), /must declare its deallocator/);
+});
+
+test("rejects a release clause on a return that is not transfer", () => {
+  const iface = parseInterface(
+    "extern func free(ptr: Ptr) -> Unit\nextern func name() -> Str release free\n",
+  );
+  const problems = validateInterface(iface);
+  assert.equal(problems.length, 1);
+  assert.equal(problems[0]?.kind, "release");
+  assert.match(formatInterfaceProblem(problems[0]!), /is not 'transfer'/);
+});
+
+test("rejects a release symbol that is not declared in the interface", () => {
+  const iface = parseInterface("extern func read(path: Str) -> transfer Str release missing\n");
+  const problems = validateInterface(iface);
+  assert.equal(problems.length, 1);
+  assert.equal(problems[0]?.kind, "release");
+  assert.match(formatInterfaceProblem(problems[0]!), /not an 'extern func' declared/);
+});
+
+test("rejects a release symbol whose signature is not (Ptr) -> Unit", () => {
+  for (const release of [
+    "extern func free(ptr: Str) -> Unit",
+    "extern func free(ptr: Ptr) -> Int",
+    "extern func free(ptr: Ptr, len: usize) -> Unit",
+    "extern func free(mut ptr: Ptr) -> Unit",
+  ]) {
+    const iface = parseInterface(`${release}\nextern func read(p: Str) -> transfer Str release free\n`);
+    const releases = validateInterface(iface).filter((problem) => problem.kind === "release");
+    assert.equal(releases.length, 1, release);
+    assert.match(formatInterfaceProblem(releases[0]!), /must be declared as 'func\(ptr: Ptr\) -> Unit'/);
+  }
+});
+
+test("rejects a function that releases its own returned buffer", () => {
+  const iface = parseInterface("extern func read(path: Str) -> transfer Str release read\n");
+  const problems = validateInterface(iface).filter((problem) => problem.kind === "release");
+  assert.equal(problems.length, 1);
+  assert.match(formatInterfaceProblem(problems[0]!), /cannot release its own/);
+});
+
 test("rejects a parameter that combines mut and transfer", () => {
   const iface: Interface = {
     cstructs: [],
