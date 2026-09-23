@@ -123,8 +123,8 @@ Xz ↔ C (authoritative, from the Xz spec):
 | Xz | C | TypeScript binding |
 |---|---|---|
 | `Bool` | `bool` (i8 in memory, i1 in registers) | `boolean` |
-| `Int` | `int64_t` | `number` (or `bigint` when > 2^53) |
-| `usize` | `uint64_t` | `number` / `bigint` |
+| `Int` | `int64_t` | `bigint` (exact; `number` loses precision above 2^53) |
+| `usize` | `uint64_t` | `bigint` (exact; `number` loses precision above 2^53) |
 | `Float` | `double` | `number` |
 | `Char` | `char` | `string` (length 1) |
 | `Str` | `XzStr { const char* ptr; size_t len; }` | `string` (encoded) or `Uint8Array` (zero-copy, P1) |

@@ -100,7 +100,9 @@ The signature is expressed in backend-neutral FFI types (`bool`, `int64`,
 `uint64`, `double`, `char`, `ptr`, `void`, and named structs), so the Bun and
 Node loaders share one description. `Str`/`Bytes` are the `XzStr`/`XzBytes`
 pointer/length structs. A struct carries its field names so a backend can
-register its layout.
+register its layout. An `int64`/`uint64` symbol crosses as `bigint` (§4.1);
+whether a backend accepts and returns `bigint` for a 64-bit type, rather than a
+lossy `number`, is unverified without a real `.so` (§8).
 
 `bun:ffi` registers only scalar and pointer FFIType values; it cannot declare a
 struct passed by value. A symbol whose signature contains `Str`, `Bytes`, or a
@@ -121,8 +123,17 @@ The encode/decode of a JavaScript `string` or `Uint8Array` into an `XzStr`/
 
 ### 4.1 Scalars
 
-`Bool` → `boolean`, `Int`/`usize` → `number` (with `bigint` for values beyond
-2^53), `Float` → `number`, `Char` → single-character `string`.
+`Bool` → `boolean`, `Int`/`usize` → `bigint`, `Float` → `number`, `Char` →
+single-character `string`.
+
+`Int`/`usize` are 64-bit ABI integers (`int64_t`/`uint64_t`). A JavaScript
+`number` holds integers only up to 2^53, so exposing one would silently lose
+precision above that range; the binding exposes `bigint` instead, the only
+exact JavaScript representation. Every value the binding sees is normalized by
+`asXzInt`: a `bigint` passes through, a safe-integer `number` (a backend that
+reports small 64-bit values as `number`) is widened exactly, and any other
+value — a fractional number or one beyond 2^53 — is a hard error, never a lossy
+cast. This mirrors the Python wrapper, which maps `Int` to the exact `int`.
 
 ### 4.2 `Str` / `Bytes`
 
@@ -263,7 +274,9 @@ function createBinding(loaded: LoadedLibrary): Binding {
 The current generator emits bindings only for signatures it can marshal
 faithfully: scalars (`Bool`, `Int`, `usize`, `Float`, `Char`), `Ptr`,
 `@cstruct` records of those, and top-level `Str`/`Bytes` (encode/decode,
-borrowed for the call, §4.2). `mut` out-parameters (the `Result` contract
+borrowed for the call, §4.2). Each `Int`/`usize` argument and return is passed
+through `asXzInt` (§4.1), so the boundary always hands back a `bigint` rather
+than a possibly-rounded `number`. `mut` out-parameters (the `Result` contract
 wrapper, §5), a `transfer` parameter or return, `Str`/`Bytes` as `@cstruct`
 fields, and by-value payloads are hard errors, not lossy output, until the
 generator emits their marshalling.
