@@ -75,10 +75,10 @@ inferred from the declarations: both kinds declare functions with the same
   `release <symbol>` clause (§4.2).
 
 A file with no marker, or with more than one, is a definition error: the
-generator never guesses the boundary kind. The marker's grammar is owned by Xz
-(§8). This section specifies the marker before implementation: the parser,
-validator, and generator do not enforce it yet, so the current code still treats
-every interface as an `@interface export` surface.
+parser never guesses the boundary kind. The marker's grammar is owned by Xz
+(§8). The parser reads it as the first token and refuses a missing, duplicate,
+or unknown marker; `validateInterface` and the generator key their ownership
+rules to it.
 
 ### 2.2 Why the generator lives in the bridge
 
@@ -178,8 +178,14 @@ C ABI ownership declaration ([Xz
 docs/10](https://github.com/x1zzdev/Xz/blob/main/docs/10-ffi-interop.md)): it is
 legal only where a foreign C callee takes ownership.
 
-- In `@interface foreign` a `transfer` parameter is legal: the binding hands the
-  backing buffer to the C callee, which owns it afterward.
+- In `@interface foreign` a `transfer` parameter is legal: the binding encodes
+  the buffer and hands it to the C callee, which owns it afterward. Because the
+  callee may keep the pointer past the call while a JavaScript `string` or
+  `Uint8Array` is garbage-collected, the binding pushes the encoded buffer onto a
+  `retained` list and releases it only when `close()` clears the list, so the
+  pointer stays valid for the library's lifetime. Only a top-level `Str`/`Bytes`
+  transfer parameter is emitted; a `Ptr` or handle `@cstruct` transfer has no
+  backing buffer to retain and is a hard error (§4.4).
 - In `@interface export` a `transfer` parameter is a definition error: Xz
   forbids `transfer` on `@export`, so the interface cannot describe an Xz
   library that takes ownership from its C caller. The generator rejects it
@@ -334,9 +340,10 @@ faithfully: scalars (`Bool`, `Int`, `usize`, `Float`, `Char`), `Ptr`,
 borrowed for the call, §4.2). Each `Int`/`usize` argument and return is passed
 through `asXzInt` (§4.1), so the boundary always hands back a `bigint` rather
 than a possibly-rounded `number`. `mut` out-parameters (the `Result` contract
-wrapper, §5), a `transfer` parameter, a `transfer` return without a declared
-`release` symbol, `Str`/`Bytes` as `@cstruct` fields, and by-value payloads are
-hard errors, not lossy output, until the generator emits their marshalling.
+wrapper, §5), a `transfer` parameter that is not a top-level `Str`/`Bytes`, a
+`transfer` return without a declared `release` symbol, `Str`/`Bytes` as
+`@cstruct` fields, and by-value payloads are hard errors, not lossy output,
+until the generator emits their marshalling.
 
 Before it emits anything, the generator validates the whole interface in one
 pass: `validateInterface` reports every declaration that is not C-representable
@@ -416,10 +423,11 @@ functions.
   before an interface using it is portable; the Python wrapper still rejects a
   `transfer` return ([Xz
   docs/10](https://github.com/x1zzdev/Xz/blob/main/docs/10-ffi-interop.md)).
-- The interface-kind marker is settled (§2.1): a mandatory `@interface export`
-  or `@interface foreign` line states whether the file describes an Xz `@export`
-  surface or a foreign C library, and the ownership rules key off it. The marker
-  is a bridge-side extension ahead of the grammar owner; Xz docs/11 and
-  `validate_interface` must accept it (with the `release` clause) before an
-  interface that uses them is portable to the CLI.
+- The interface-kind marker is settled and implemented (§2.1): a mandatory
+  `@interface export` or `@interface foreign` line states whether the file
+  describes an Xz `@export` surface or a foreign C library, and the parser,
+  validator, and generator key the ownership rules to it. Portability is the
+  open part: the marker is a bridge-side extension ahead of the grammar owner,
+  so Xz docs/11 and `validate_interface` must accept it (with the `release`
+  clause) before an interface that uses them is portable to the CLI.
 - Edge runtime requires Wasm, which changes the loading story entirely.

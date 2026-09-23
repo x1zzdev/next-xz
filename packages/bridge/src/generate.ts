@@ -25,7 +25,7 @@ export function generateBinding(iface: Interface, options: GenerateOptions): str
   const names = cstructNames(iface);
 
   for (const func of iface.funcs) {
-    assertGeneratable(func, cstructs);
+    assertGeneratable(func, cstructs, iface.kind === "foreign");
   }
 
   const needs = collectMarshalling(iface);
@@ -44,7 +44,7 @@ export function generateBinding(iface: Interface, options: GenerateOptions): str
   lines.push("");
   lines.push(...emitBindingInterface(iface, names));
   lines.push("");
-  lines.push(...emitBindFunction(iface, names));
+  lines.push(...emitBindFunction(iface, names, needs));
   lines.push("");
   return lines.join("\n");
 }
@@ -52,8 +52,14 @@ export function generateBinding(iface: Interface, options: GenerateOptions): str
 function assertGeneratable(
   func: ExternFunc,
   cstructs: ReadonlyMap<string, CStruct>,
+  foreign: boolean,
 ): void {
   if (func.transferReturn) {
+    if (!foreign) {
+      throw new BridgeDefinitionError(
+        `symbol '${func.name}': a 'transfer' return is legal only on an '@interface foreign'; an Xz '@export' surface retains its returns`,
+      );
+    }
     if (!isNamed(func.returnType, "Str") && !isNamed(func.returnType, "Bytes")) {
       throw new BridgeDefinitionError(
         `symbol '${func.name}': a 'transfer' return is emitted only for top-level Str/Bytes; '${renderXzType(func.returnType)}' has no release path`,
@@ -66,6 +72,18 @@ function assertGeneratable(
     }
   }
   for (const param of func.params) {
+    if (param.transfer) {
+      if (!foreign) {
+        throw new BridgeDefinitionError(
+          `symbol '${func.name}': a 'transfer' parameter is legal only on an '@interface foreign'; Xz forbids ownership transfer on '@export'`,
+        );
+      }
+      if (!isNamed(param.type, "Str") && !isNamed(param.type, "Bytes")) {
+        throw new BridgeDefinitionError(
+          `symbol '${func.name}': parameter '${param.name}' is declared 'transfer'; ownership handoff is emitted only for top-level Str and Bytes buffers, which the binding can retain`,
+        );
+      }
+    }
     if (param.mutable) {
       throw new BridgeDefinitionError(
         `symbol '${func.name}': mutable parameter '${param.name}' has no generated binding yet; the contract wrapper pattern (docs/01 section 5) is not emitted from .xzint`,
@@ -153,6 +171,7 @@ interface MarshallingNeeds {
   decodeBytes: boolean;
   pointerValue: boolean;
   asXzInt: boolean;
+  retention: boolean;
 }
 
 function collectMarshalling(iface: Interface): MarshallingNeeds {
@@ -163,11 +182,13 @@ function collectMarshalling(iface: Interface): MarshallingNeeds {
     decodeBytes: false,
     pointerValue: false,
     asXzInt: false,
+    retention: false,
   };
   for (const func of iface.funcs) {
     for (const param of func.params) {
       if (isNamed(param.type, "Str")) needs.encodeStr = true;
       if (isNamed(param.type, "Bytes")) needs.encodeBytes = true;
+      if (param.transfer) needs.retention = true;
       if (isIntType(param.type)) needs.asXzInt = true;
     }
     if (isNamed(func.returnType, "Str")) {
@@ -203,7 +224,11 @@ function emitImport(needs: MarshallingNeeds, module: string): string {
   return `import { ${[...values, ...types].join(", ")} } from ${JSON.stringify(module)};`;
 }
 
-function emitBindFunction(iface: Interface, names: ReadonlySet<string>): string[] {
+function emitBindFunction(
+  iface: Interface,
+  names: ReadonlySet<string>,
+  needs: MarshallingNeeds,
+): string[] {
   const lines = ["export function bind(backend: FfiBackend): Binding {"];
   lines.push("  return createBinding(");
   lines.push("    loadLibrary(manifest, { expectedXzVersion: manifest.xzVersion, backend }),");
@@ -220,12 +245,19 @@ function emitBindFunction(iface: Interface, names: ReadonlySet<string>): string[
   lines.push(
     "  const symbols = loaded.symbols as Readonly<Record<string, (...args: unknown[]) => unknown>>;",
   );
+  if (needs.retention) {
+    lines.push("  const retained: Uint8Array[] = [];");
+  }
   lines.push("  return {");
   for (const func of iface.funcs) {
     const params = func.params.map((param) => param.name).join(", ");
-    const args = func.params.map(emitArgument);
+    const preamble: string[] = [];
+    const args = func.params.map((param) => emitArgument(param, preamble));
     const call = `symbols[${JSON.stringify(func.name)}]!(${args.join(", ")})`;
     lines.push(`    ${func.name}(${params}) {`);
+    for (const line of preamble) {
+      lines.push(`      ${line}`);
+    }
     if (
       func.transferReturn &&
       (isNamed(func.returnType, "Str") || isNamed(func.returnType, "Bytes"))
@@ -251,19 +283,32 @@ function emitBindFunction(iface: Interface, names: ReadonlySet<string>): string[
     }
     lines.push("    },");
   }
-  lines.push("    close: () => {");
-  lines.push("      loaded.close();");
-  lines.push("    },");
-  lines.push("  };");
-  lines.push("}");
-  return lines;
+lines.push("    close: () => {");
+    if (needs.retention) {
+      lines.push("      retained.length = 0;");
+    }
+    lines.push("      loaded.close();");
+    lines.push("    },");
+    lines.push("  };");
+    lines.push("}");
+    return lines;
 }
 
-function emitArgument(param: Param): string {
+function emitArgument(param: Param, preamble: string[]): string {
   if (isNamed(param.type, "Str")) {
+    if (param.transfer) {
+      preamble.push(`const ${param.name}Pointer = encodeStr(${param.name});`);
+      preamble.push(`retained.push(${param.name}Pointer.ptr);`);
+      return `${param.name}Pointer`;
+    }
     return `encodeStr(${param.name})`;
   }
   if (isNamed(param.type, "Bytes")) {
+    if (param.transfer) {
+      preamble.push(`const ${param.name}Pointer = encodeBytes(${param.name});`);
+      preamble.push(`retained.push(${param.name}Pointer.ptr);`);
+      return `${param.name}Pointer`;
+    }
     return `encodeBytes(${param.name})`;
   }
   if (isIntType(param.type)) {

@@ -89,6 +89,16 @@ test("rejects a transfer parameter the exported boundary cannot carry", () => {
   );
 });
 
+test("emits a retained transfer parameter in a foreign interface", () => {
+  const iface = parseInterface(`${FOREIGN}extern func write(transfer frame: Bytes) -> Int\n`);
+  const source = generateBinding(iface, options);
+  assert.match(source, /const retained: Uint8Array\[\] = \[\];/);
+  assert.match(source, /const framePointer = encodeBytes\(frame\);/);
+  assert.match(source, /retained\.push\(framePointer\.ptr\);/);
+  assert.match(source, /return asXzInt\(symbols\["write"\]!\(framePointer\)\);/);
+  assert.match(source, /retained\.length = 0;/);
+});
+
 test("rejects a transfer return without a release symbol", () => {
   const iface = parseInterface(`${FOREIGN}extern func read(path: Str) -> transfer Str\n`);
   assert.throws(
