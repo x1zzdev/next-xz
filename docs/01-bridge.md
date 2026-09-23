@@ -129,6 +129,14 @@ and it stays alive as long as the callee may hold the pointer. It never passes
 a borrowed buffer to a callee that may retain it, and it rejects a `transfer`
 of a non-buffer type.
 
+A return is owned by the callee by default: the caller borrows it and must not
+free it. A `transfer` return (`-> transfer T`, [Xz
+docs/10](https://github.com/x1zzdev/Xz/blob/main/docs/10-ffi-interop.md)) moves
+ownership to the caller, but the generated binding cannot take it: it copies
+the returned buffer into a JavaScript value and has no library deallocator to
+release the original, so it rejects a `transfer` return rather than leak the
+buffer.
+
 `Str`/`Bytes` are marshalled at top level only. A `@cstruct` field of either
 type, a `Ptr` or handle record handed off with `transfer`, and by-value payloads
 remain hard errors until the generator emits their marshalling.
@@ -223,10 +231,10 @@ export function bind(backend: FfiBackend): Binding {
 The current generator emits bindings only for signatures it can marshal
 faithfully: scalars (`Bool`, `Int`, `usize`, `Float`, `Char`), `Ptr`,
 `@cstruct` records of those, and top-level `Str`/`Bytes` (encode/decode, with
-`transfer` retention per §4.2). `mut` out-parameters (the `Result` contract
-wrapper, §5), `Str`/`Bytes` as `@cstruct` fields, and `transfer` of `Ptr` or a
-handle record are hard errors, not lossy output, until the generator emits
-their marshalling.
+`transfer` parameter retention per §4.2). `mut` out-parameters (the `Result`
+contract wrapper, §5), `Str`/`Bytes` as `@cstruct` fields, a `transfer` return,
+and `transfer` of `Ptr` or a handle record are hard errors, not lossy output,
+until the generator emits their marshalling.
 
 ## 7. Performance budget
 
@@ -246,4 +254,8 @@ functions.
   caller's buffer until `close()` (§4.2). Whether an FFI backend exposes a
   returned struct field as a byte view (rather than an opaque pointer) is
   unverified without a real `.so`; `koffi`/Bun smoke tests are outstanding.
+- A `transfer` return (`-> transfer T`) moves ownership to the caller, but the
+  binding has no library deallocator to release a returned buffer, so it rejects
+  the modifier (as the Python wrapper does). Honoring it needs a declared
+  release symbol in the interface; that contract is not specified yet.
 - Edge runtime requires Wasm, which changes the loading story entirely.
