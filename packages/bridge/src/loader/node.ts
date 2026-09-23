@@ -39,8 +39,16 @@ const KOFFI_SCALAR: Readonly<Record<FfiScalar, string>> = {
   void: "void",
 };
 
+let backendCount = 0;
+
+interface StructRegistration {
+  readonly signature: string;
+  readonly type: KoffiType;
+}
+
 export class KoffiBackend implements FfiBackend {
-  private readonly structs = new Map<string, KoffiType>();
+  private readonly structs = new Map<string, StructRegistration>();
+  private readonly namespace = `xzb${++backendCount}`;
 
   constructor(private readonly koffi: KoffiModule) {}
 
@@ -84,18 +92,42 @@ export class KoffiBackend implements FfiBackend {
   }
 
   private registerStruct(type: FfiStruct): KoffiType {
+    const signature = structSignature(type);
     const existing = this.structs.get(type.name);
     if (existing !== undefined) {
-      return existing;
+      if (existing.signature !== signature) {
+        throw new BridgeRuntimeError(
+          `koffi already registered '@cstruct ${type.name}' with a different layout in this KoffiBackend; the same name must map to one layout per backend`,
+        );
+      }
+      return existing.type;
     }
     const fields: Record<string, KoffiFieldType> = {};
     for (const field of type.fields) {
       fields[field.name] = this.toKoffiType(field.type);
     }
-    const registered = this.koffi.struct(type.name, fields);
-    this.structs.set(type.name, registered);
+    const registered = this.koffi.struct(`${type.name}__${this.namespace}`, fields);
+    this.structs.set(type.name, { signature, type: registered });
     return registered;
   }
+}
+
+/**
+ * `koffi.struct` registers into a process-global, name-keyed table. The backend
+ * prefixes each registration with a per-instance namespace so a second
+ * `KoffiBackend` in the same process cannot collide with the first (or with any
+ * other koffi consumer). The neutral `@cstruct` name stays the cache key; within
+ * one backend it may carry only one layout, and a conflicting layout is a hard
+ * error instead of silently reusing the first registration.
+ */
+function structSignature(type: FfiStruct): string {
+  return `${type.name}{${type.fields
+    .map((field) => `${field.name}:${ffiTypeSignature(field.type)}`)
+    .join(",")}}`;
+}
+
+function ffiTypeSignature(type: FfiType): string {
+  return typeof type === "string" ? type : structSignature(type);
 }
 
 function isPointerStruct(type: FfiType): boolean {

@@ -90,9 +90,12 @@ test("KoffiBackend registers nested @cstruct records inner-first and reuses toke
   backend.dlopen(manifest.path, manifest.symbols);
 
   assert.deepEqual(
-    koffi.registrations.map((entry) => entry["name"]),
+    koffi.registrations.map((entry) => String(entry["name"]).replace(/__xzb\d+$/, "")),
     ["Point", "Line"],
   );
+  for (const entry of koffi.registrations) {
+    assert.match(String(entry["name"]), /__xzb\d+$/);
+  }
   const point = koffi.registrations[0]?.["token"];
   const lineFields = koffi.registrations[1]?.["fields"] as Record<string, unknown>;
   assert.equal(lineFields["a"], point);
@@ -111,6 +114,44 @@ test("KoffiBackend registers each struct once across symbols", () => {
     xzVersion: "0.1.0",
   });
   backend.dlopen(manifest.path, manifest.symbols);
+  assert.equal(koffi.registrations.length, 1);
+});
+
+test("KoffiBackend namespaces koffi struct names so two backends do not collide", () => {
+  const koffi = fakeKoffi();
+  const iface = parseInterface("@interface export\nextern func show(text: Str) -> Int\n");
+  const manifest = manifestFromInterface(iface, {
+    name: "liborder",
+    path: "liborder.so",
+    xzVersion: "0.1.0",
+  });
+  new KoffiBackend(koffi.module).dlopen(manifest.path, manifest.symbols);
+  new KoffiBackend(koffi.module).dlopen(manifest.path, manifest.symbols);
+
+  const names = koffi.registrations.map((entry) => String(entry["name"]));
+  assert.equal(names.length, 2);
+  assert.notEqual(names[0], names[1]);
+  assert.match(names[0] ?? "", /^XzStr__xzb\d+$/);
+});
+
+test("KoffiBackend rejects the same @cstruct name with a conflicting layout", () => {
+  const koffi = fakeKoffi();
+  const backend = new KoffiBackend(koffi.module);
+  const one = manifestFromInterface(
+    parseInterface(
+      "@interface export\n@cstruct record Point {\n    x: Int\n}\nextern func a(p: Point) -> Int\n",
+    ),
+    { name: "liba", path: "liba.so", xzVersion: "0.1.0" },
+  );
+  const two = manifestFromInterface(
+    parseInterface(
+      "@interface export\n@cstruct record Point {\n    x: Int\n    y: Int\n}\nextern func b(p: Point) -> Int\n",
+    ),
+    { name: "libb", path: "libb.so", xzVersion: "0.1.0" },
+  );
+
+  backend.dlopen(one.path, one.symbols);
+  assert.throws(() => backend.dlopen(two.path, two.symbols), BridgeRuntimeError);
   assert.equal(koffi.registrations.length, 1);
 });
 
