@@ -137,6 +137,49 @@ test("parses generic type arguments as non-C-representable shape", () => {
   });
 });
 
+test("parses an @error name-to-code map", () => {
+  const iface = parseInterface(`${EXPORT}@error InvalidAmount = 1\n@error Overflow = 2\n`);
+  assert.deepEqual(iface.errors, [
+    { name: "InvalidAmount", code: 1 },
+    { name: "Overflow", code: 2 },
+  ]);
+});
+
+test("defaults the error map to empty", () => {
+  const iface = parseInterface(EXPORT);
+  assert.deepEqual(iface.errors, []);
+});
+
+test("parses a contract ok code clause after the return type", () => {
+  const iface = parseInterface(`${EXPORT}extern func parse(text: Str, mut out: Float) -> Int contract ok 0\n`);
+  assert.deepEqual(iface.funcs[0]?.contract, { okCode: 0 });
+});
+
+test("defaults a missing contract clause to absent", () => {
+  const iface = parseInterface(`${EXPORT}extern func id(n: Int) -> Int\n`);
+  assert.equal(iface.funcs[0]?.contract, undefined);
+});
+
+test("parses a negative ok code", () => {
+  const iface = parseInterface(`${EXPORT}extern func parse(mut out: Int) -> Int contract ok -1\n`);
+  assert.deepEqual(iface.funcs[0]?.contract, { okCode: -1 });
+});
+
+test("rejects a contract clause without an integer code", () => {
+  assert.throws(
+    () => parseInterface(`${EXPORT}extern func parse(mut out: Int) -> Int contract ok\n`),
+    (error: unknown) =>
+      error instanceof XzintParseError && error.message.includes("expected an integer"),
+  );
+});
+
+test("rejects an @error declaration without a code", () => {
+  assert.throws(
+    () => parseInterface(`${EXPORT}@error Broken\n`),
+    XzintParseError,
+  );
+});
+
 test("ignores line, doc, and block comments", () => {
   const source = `@interface export
 // a line comment
@@ -169,11 +212,15 @@ test("rejects a function body as outside the .xzint subset", () => {
   );
 });
 
-test("rejects numeric and string literals as outside the .xzint subset", () => {
+test("rejects a numeric literal outside an @error or contract clause", () => {
   assert.throws(
-    () => parseInterface(`${EXPORT}extern func f(n: Int) -> Int\nconst LIMIT = 42\n`, "lib.xzint"),
-    XzintParseError,
+    () => parseInterface(`${EXPORT}extern func f(n: Int) -> Int\n42\n`, "lib.xzint"),
+    (error: unknown) =>
+      error instanceof XzintParseError && error.message.includes("may only declare"),
   );
+});
+
+test("rejects string literals as outside the .xzint subset", () => {
   assert.throws(
     () => parseInterface(`${EXPORT}extern func f(s: Str) -> Int\nconst NAME = "lib"\n`, "lib.xzint"),
     XzintParseError,

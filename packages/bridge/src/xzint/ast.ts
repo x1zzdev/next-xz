@@ -35,6 +35,22 @@ export interface ExternFunc {
   readonly returnType: XzType;
   readonly transferReturn: boolean;
   readonly release?: string;
+  readonly contract?: Contract;
+}
+
+/**
+ * The `Result`-contract wrapper a symbol declares (docs/01 §5, pattern 1): the
+ * symbol returns a status `Int`/`usize` and writes its value through one `mut`
+ * out-parameter. The interface-level `@error` map names the non-ok codes.
+ */
+export interface Contract {
+  readonly okCode: number;
+}
+
+/** A named non-ok status code from an interface-level `@error Name = code` line. */
+export interface NamedError {
+  readonly name: string;
+  readonly code: number;
 }
 
 export interface Field {
@@ -53,4 +69,5 @@ export interface Interface {
   readonly kind: InterfaceKind;
   readonly funcs: readonly ExternFunc[];
   readonly cstructs: readonly CStruct[];
+  readonly errors: readonly NamedError[];
 }

@@ -16,12 +16,14 @@ export { parseInterface } from "./xzint/parse.js";
 export { tokenize } from "./xzint/token.js";
 export type { Token, TokenKind } from "./xzint/token.js";
 export type {
+  Contract,
   CStruct,
   ExternFunc,
   Field,
   GenericType,
   Interface,
   InterfaceKind,
+  NamedError,
   NamedType,
   Param,
   PrimitiveType,

@@ -308,6 +308,7 @@ test("rejects a parameter that combines mut and transfer", () => {
   const iface: Interface = {
     kind: "foreign",
     cstructs: [],
+    errors: [],
     funcs: [
       {
         name: "bad",

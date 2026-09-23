@@ -13,6 +13,8 @@ export type TokenKind =
   | "colon"
   | "pipe"
   | "arrow"
+  | "equals"
+  | "number"
   | "eof";
 
 export interface Token {
@@ -32,10 +34,12 @@ const PUNCTUATION: Readonly<Record<string, TokenKind>> = {
   ",": "comma",
   ":": "colon",
   "|": "pipe",
+  "=": "equals",
 };
 
 const IDENT_START = /[A-Za-z_]/;
 const IDENT_PART = /[A-Za-z0-9_]/;
+const DIGIT = /[0-9]/;
 
 export function tokenize(source: string, file: string): Token[] {
   const tokens: Token[] = [];
@@ -109,6 +113,22 @@ export function tokenize(source: string, file: string): Token[] {
       tokens.push({ kind: "arrow", text: "->", line: startLine, column: startColumn });
       index += 2;
       column += 2;
+      continue;
+    }
+
+    if (DIGIT.test(char) || (char === "-" && DIGIT.test(source[index + 1] ?? ""))) {
+      let text = "";
+      if (char === "-") {
+        text += char;
+        index += 1;
+        column += 1;
+      }
+      while (index < length && DIGIT.test(source[index]!)) {
+        text += source[index];
+        index += 1;
+        column += 1;
+      }
+      tokens.push({ kind: "number", text, line: startLine, column: startColumn });
       continue;
     }
 

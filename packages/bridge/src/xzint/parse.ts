@@ -1,10 +1,12 @@
 import { XzintParseError } from "../errors.js";
 import type {
   CStruct,
+  Contract,
   ExternFunc,
   Field,
   Interface,
   InterfaceKind,
+  NamedError,
   NamedType,
   Param,
   XzType,
@@ -12,6 +14,24 @@ import type {
 import { tokenize, type Token, type TokenKind } from "./token.js";
 
 const UNIT: NamedType = { kind: "named", name: "Unit" };
+
+function buildExtern(
+  name: string,
+  params: readonly Param[],
+  returnType: XzType,
+  transferReturn: boolean,
+  release: string | undefined,
+  contract: Contract | undefined,
+): ExternFunc {
+  return {
+    name,
+    params,
+    returnType,
+    transferReturn,
+    ...(release === undefined ? {} : { release }),
+    ...(contract === undefined ? {} : { contract }),
+  };
+}
 
 const KIND_LABEL: Readonly<Record<TokenKind, string>> = {
   ident: "identifier",
@@ -26,6 +46,8 @@ const KIND_LABEL: Readonly<Record<TokenKind, string>> = {
   colon: "':'",
   pipe: "'|'",
   arrow: "'->'",
+  equals: "'='",
+  number: "integer",
   eof: "end of file",
 };
 
@@ -45,12 +67,19 @@ class Parser {
     const kind = this.parseInterfaceKind();
     const funcs: ExternFunc[] = [];
     const cstructs: CStruct[] = [];
+    const errors: NamedError[] = [];
     while (!this.at("eof")) {
       if (this.at("at")) {
-        if (this.peek(1)?.kind === "ident" && this.peek(1)?.text === "interface") {
+        const annotation = this.peek(1);
+        const text = annotation.kind === "ident" ? annotation.text : "";
+        if (text === "interface") {
           throw this.error(
             "the '@interface' marker must appear exactly once, before any declaration",
           );
+        }
+        if (text === "error") {
+          errors.push(this.parseNamedError());
+          continue;
         }
         cstructs.push(this.parseCStruct());
       } else if (this.atIdent("extern")) {
@@ -58,11 +87,11 @@ class Parser {
       } else {
         const token = this.peek();
         throw this.error(
-          `'.xzint' interface files may only declare 'extern func' and '@cstruct record'; found '${token.text || token.kind}'`,
+          `'.xzint' interface files may only declare 'extern func', '@cstruct record', and '@error Name = code'; found '${token.text || token.kind}'`,
         );
       }
     }
-    return { kind, funcs, cstructs };
+    return { kind, funcs, cstructs, errors };
   }
 
   private parseInterfaceKind(): InterfaceKind {
@@ -82,6 +111,14 @@ class Parser {
       throw this.error(`expected 'export' or 'foreign' after '@interface'; found '${kind}'`);
     }
     return kind;
+  }
+
+  private parseNamedError(): NamedError {
+    this.expect("at");
+    this.expectIdent("error");
+    const name = this.expectIdent();
+    this.expect("equals");
+    return { name, code: this.parseNumber() };
   }
 
   private parseCStruct(): CStruct {
@@ -133,9 +170,26 @@ class Parser {
         release = this.expectIdent();
       }
     }
-    return release === undefined
-      ? { name, params, returnType, transferReturn }
-      : { name, params, returnType, transferReturn, release };
+    const contract = this.parseContractClause();
+    return buildExtern(name, params, returnType, transferReturn, release, contract);
+  }
+
+  private parseContractClause(): Contract | undefined {
+    if (!this.atIdent("contract")) {
+      return undefined;
+    }
+    this.advance();
+    this.expectIdent("ok");
+    return { okCode: this.parseNumber() };
+  }
+
+  private parseNumber(): number {
+    const token = this.peek();
+    if (token.kind !== "number") {
+      throw this.error(`expected an integer; found '${token.text || token.kind}'`);
+    }
+    this.advance();
+    return Number(token.text);
   }
 
   private parseParam(): Param {
