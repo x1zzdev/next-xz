@@ -72,3 +72,14 @@ export type {
   KoffiSignature,
   KoffiType,
 } from "./loader/node.js";
+export {
+  WasmBackend,
+  compileWasm,
+  instantiateWasm,
+  loadWasmLibrary,
+} from "./loader/wasm.js";
+export type {
+  WasmInstance,
+  WasmLoadOptions,
+  WasmModule,
+} from "./loader/wasm.js";

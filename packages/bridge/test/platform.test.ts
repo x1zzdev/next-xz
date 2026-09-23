@@ -15,9 +15,14 @@ const manifest = (): LibraryManifest => {
   return manifestFromInterface(iface, { name: "liborder", path: "liborder.so", xzVersion: "0.1.0" });
 };
 
-test("detectPlatform reports bun only when the Bun global is present", () => {
+test("detectPlatform reports bun, node, or edge from the available globals", () => {
   assert.equal(detectPlatform({ Bun: {} }), "bun");
   assert.equal(detectPlatform({}), "node");
+  assert.equal(
+    detectPlatform({ process: { versions: { node: "22" } }, WebAssembly: {} }),
+    "node",
+  );
+  assert.equal(detectPlatform({ WebAssembly: {} }), "edge");
 });
 
 test("loadPlatformLibrary selects the koffi loader when Bun is absent", async () => {
@@ -54,5 +59,27 @@ test("loadPlatformLibrary selects the bun:ffi loader when the Bun global is pres
     );
   } finally {
     delete globals.Bun;
+  }
+});
+
+test("loadPlatformLibrary points the Edge runtime at loadWasmLibrary", async () => {
+  const globals = globalThis as Record<string, unknown>;
+  const savedProcess = globals["process"];
+  const savedBun = globals["Bun"];
+  delete globals["Bun"];
+  globals["process"] = undefined;
+  try {
+    await assert.rejects(
+      loadPlatformLibrary(manifest(), { expectedXzVersion: "0.1.0" }),
+      (error: unknown) =>
+        error instanceof BridgeRuntimeError && error.message.includes("loadWasmLibrary"),
+    );
+  } finally {
+    globals["process"] = savedProcess;
+    if (savedBun === undefined) {
+      delete globals["Bun"];
+    } else {
+      globals["Bun"] = savedBun;
+    }
   }
 });
