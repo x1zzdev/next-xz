@@ -1,4 +1,4 @@
-import { NotCRepresentableError } from "../errors.js";
+import { BridgeDefinitionError } from "../errors.js";
 import { isPrimitive, renderXzType, type PrimitiveName, type TypePosition } from "../type-map.js";
 import type { CStruct, XzType } from "../xzint/ast.js";
 
@@ -43,6 +43,14 @@ const PRIMITIVE_FFI: Readonly<Record<PrimitiveName, FfiType>> = {
   Unit: "void",
 };
 
+/**
+ * Maps an already-validated `.xzint` type to its backend-neutral FFI form.
+ *
+ * `validateInterface` is the single owner of the C-representability and cycle
+ * rules. This function performs structural mapping only and assumes the
+ * interface passed those checks; the throws below mark an internal invariant
+ * violation, not a second copy of the rules.
+ */
 export function mapXzTypeToFfi(
   type: XzType,
   cstructs: ReadonlyMap<string, CStruct>,
@@ -58,26 +66,20 @@ function mapType(
   seen: ReadonlySet<string>,
 ): FfiType {
   if (type.kind === "generic") {
-    throw new NotCRepresentableError(
-      renderXzType(type),
-      `generic type '${type.name}' has no C declaration`,
-    );
+    throw unvalidatedMapping(renderXzType(type));
   }
   if (isPrimitive(type.name)) {
     if (type.name === "Unit" && position !== "return") {
-      throw new NotCRepresentableError("Unit", "Unit is allowed only as a return type");
+      throw unvalidatedMapping("Unit");
     }
     return PRIMITIVE_FFI[type.name];
   }
   const record = cstructs.get(type.name);
   if (record === undefined) {
-    throw new NotCRepresentableError(
-      type.name,
-      "unknown type; declare it as a @cstruct record or use a C-representable primitive",
-    );
+    throw unvalidatedMapping(type.name);
   }
   if (seen.has(record.name)) {
-    throw new NotCRepresentableError(record.name, "@cstruct records must not form a cycle");
+    throw unvalidatedMapping(record.name);
   }
   const nested = new Set(seen);
   nested.add(record.name);
@@ -89,4 +91,10 @@ function mapType(
       type: mapType(field.type, cstructs, "field", nested),
     })),
   };
+}
+
+function unvalidatedMapping(xzType: string): BridgeDefinitionError {
+  return new BridgeDefinitionError(
+    `Cannot map Xz type '${xzType}' to an FFI type: the interface must pass validateInterface before mapping`,
+  );
 }

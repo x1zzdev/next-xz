@@ -3,7 +3,6 @@ import { test } from "node:test";
 
 import {
   BridgeDefinitionError,
-  NotCRepresentableError,
   manifestFromInterface,
   mapXzTypeToFfi,
   parseInterface,
@@ -78,20 +77,29 @@ test("maps a @cstruct record, including nested records", () => {
   });
 });
 
-test("rejects a cyclic @cstruct record", () => {
+test("manifest validation rejects a cyclic @cstruct before mapping", () => {
   const iface = parseInterface("@cstruct record A {\n    b: B\n}\n@cstruct record B {\n    a: A\n}\n");
-  const cstructs = new Map(iface.cstructs.map((cstruct) => [cstruct.name, cstruct]));
   assert.throws(
-    () => mapXzTypeToFfi(named("A"), cstructs),
+    () => manifestFromInterface(iface, { name: "lib", path: "lib.so", xzVersion: "0.1.0" }),
     (error: unknown) =>
-      error instanceof NotCRepresentableError && error.message.includes("cycle"),
+      error instanceof BridgeDefinitionError && error.message.includes("must not form a cycle"),
   );
 });
 
-test("rejects Unit as a parameter and generics", () => {
-  assert.throws(() => mapXzTypeToFfi(named("Unit"), noStructs, "param"), NotCRepresentableError);
-  const result: XzType = { kind: "generic", name: "Result", args: [named("Int"), named("Int")] };
-  assert.throws(() => mapXzTypeToFfi(result, noStructs), NotCRepresentableError);
+test("manifest validation rejects Unit parameters and generics before mapping", () => {
+  const unitParam = parseInterface("extern func f(u: Unit) -> Int\n");
+  assert.throws(
+    () => manifestFromInterface(unitParam, { name: "lib", path: "lib.so", xzVersion: "0.1.0" }),
+    (error: unknown) =>
+      error instanceof BridgeDefinitionError &&
+      error.message.includes("Unit is allowed only as a return type"),
+  );
+  const generic = parseInterface("extern func f(v: Result[Int, Int]) -> Int\n");
+  assert.throws(
+    () => manifestFromInterface(generic, { name: "lib", path: "lib.so", xzVersion: "0.1.0" }),
+    (error: unknown) =>
+      error instanceof BridgeDefinitionError && error.message.includes("has no C declaration"),
+  );
 });
 
 test("builds a manifest: mut params become pointers, returns keep their type", () => {
