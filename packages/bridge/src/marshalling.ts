@@ -3,6 +3,14 @@ import { BridgeRuntimeError } from "./errors.js";
 export interface XzPointerValue {
   readonly ptr: Uint8Array;
   readonly len: number;
+  /**
+   * The FFI backend's original pointer value, preserved when the backend had to
+   * decode `ptr` into a byte view. A `transfer` return must release the original
+   * allocation, not a copy, so the generated binding passes this back to the
+   * release symbol; it falls back to `ptr` when the backend exposes bytes
+   * directly.
+   */
+  readonly address?: unknown;
 }
 
 const encoder = new TextEncoder();

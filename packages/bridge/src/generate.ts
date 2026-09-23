@@ -267,7 +267,7 @@ function emitBindFunction(
       lines.push("      try {");
       lines.push(`        return ${decode}(result);`);
       lines.push("      } finally {");
-      lines.push(`        symbols[${JSON.stringify(func.release!)}]!(result.ptr);`);
+      lines.push(`        symbols[${JSON.stringify(func.release!)}]!(result.address ?? result.ptr);`);
       lines.push("      }");
     } else if (isNamed(func.returnType, "Str")) {
       lines.push(`      return decodeStr(${call} as XzPointerValue);`);

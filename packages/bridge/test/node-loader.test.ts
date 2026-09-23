@@ -31,8 +31,8 @@ function fakeKoffi(): FakeKoffi {
       load: (path) => {
         loadedPaths.push(path);
         return {
-          func: (signature) => {
-            signatures.push(signature);
+          func: (name, ret, args) => {
+            signatures.push({ name, ret, args });
             return () => 0;
           },
           close: () => {},
@@ -43,6 +43,7 @@ function fakeKoffi(): FakeKoffi {
         registrations.push({ name, fields, token });
         return token;
       },
+      decode: () => new Uint8Array(),
     },
   };
 }
@@ -53,7 +54,9 @@ test("KoffiBackend maps neutral FFI scalars to a koffi signature", () => {
   const library = backend.dlopen("liborder.so", {
     add: { args: ["int64", "uint64"], returns: "void" },
   });
-  assert.deepEqual(koffi.signatures, [{ ret: "void", args: ["int64_t", "uint64_t"] }]);
+  assert.deepEqual(koffi.signatures, [
+    { name: "add", ret: "void", args: ["int64_t", "uint64_t"] },
+  ]);
   assert.equal(typeof library.symbols["add"], "function");
 });
 
@@ -70,7 +73,7 @@ test("KoffiBackend registers an XzStr struct and passes it by value", () => {
 
   const token = koffi.registrations[0]?.["token"];
   assert.deepEqual(koffi.registrations[0]?.["fields"], { ptr: "void *", len: "uint64_t" });
-  assert.deepEqual(koffi.signatures, [{ ret: "int64_t", args: [token] }]);
+  assert.deepEqual(koffi.signatures, [{ name: "show", ret: "int64_t", args: [token] }]);
 });
 
 test("KoffiBackend registers nested @cstruct records inner-first and reuses tokens", () => {
@@ -95,7 +98,7 @@ test("KoffiBackend registers nested @cstruct records inner-first and reuses toke
   assert.equal(lineFields["a"], point);
   assert.equal(lineFields["b"], point);
   const line = koffi.registrations[1]?.["token"];
-  assert.deepEqual(koffi.signatures, [{ ret: point, args: [line] }]);
+  assert.deepEqual(koffi.signatures, [{ name: "midline", ret: point, args: [line] }]);
 });
 
 test("KoffiBackend registers each struct once across symbols", () => {
@@ -121,6 +124,7 @@ test("KoffiBackend closes the loaded library", () => {
       },
     }),
     struct: () => ({}),
+    decode: () => new Uint8Array(),
   });
   const library = backend.dlopen("liborder.so", { add: { args: [], returns: "int64" } });
   library.close();

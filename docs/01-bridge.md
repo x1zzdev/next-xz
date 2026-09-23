@@ -147,6 +147,16 @@ signature. The two runtimes therefore differ in capability, not in API: a
 program that needs struct-valued exports must run on Node until `bun:ffi` gains
 by-value struct support.
 
+`koffi` decodes a `void*` struct field as an opaque pointer, not a byte view. A
+symbol that returns `XzStr`/`XzBytes` is therefore wrapped: the loader reads the
+returned `len` bytes through `koffi.decode` and hands the binding a
+`XzPointerValue` whose `ptr` is a byte view, preserving the backend's original
+pointer as `address` (§4.2). Reading a returned buffer and freeing a transferred
+one stay separate concerns, because `koffi.decode` copies: releasing the decoded
+view would free the wrong allocation. `KoffiBackend` targets the current
+`lib.func(name, ret, args)` API and unwraps the CommonJS default export an ESM
+`import("koffi")` returns.
+
 The encode/decode of a JavaScript `string` or `Uint8Array` into an `XzStr`/
 `XzBytes` value belongs to the generated binding (§4.2), not the loader.
 
@@ -209,7 +219,10 @@ extern func strdup(s: Str) -> transfer Str release free
 The release symbol is declared in the same interface as a function taking one
 borrowed `Ptr` and returning `Unit`. The binding copies the returned buffer into
 a JavaScript value, then calls the release symbol with the returned `ptr` in a
-`finally` path, so a decode failure cannot leak it. A `transfer` return without
+`finally` path, so a decode failure cannot leak it. When the backend had to
+decode `ptr` into a byte view, `result.address` carries the backend's original
+pointer and the release symbol receives that instead; passing the decoded copy
+would free the wrong allocation. A `transfer` return without
 a `release` clause is a hard error, and a `release` clause on a return that is
 not `transfer` is a definition error: a buffer is never silently leaked or
 freed twice. Only a top-level `Str`/`Bytes` return has a release path; a
@@ -410,9 +423,11 @@ functions.
   `@interface foreign` may declare one, an `@interface export` may not, because
   an Xz `@export` surface cannot take ownership. Emitting a retained handoff
   still needs a memory model that accepts the C caller's ownership (§4.2).
-  Whether an FFI backend exposes a returned struct field as a byte view (rather
-  than an opaque pointer) is unverified without a real `.so`; `koffi`/Bun smoke
-  tests are outstanding.
+  The Node/koffi return path is verified against a real `.so` (a C fixture with
+  a `transfer` return plus deallocator, §4.2): `koffi` exposes a returned
+  `void*` as an opaque pointer, the loader decodes it and preserves the original
+  as `address`, and the release symbol frees that original. Bun's by-value
+  struct path still cannot be exercised and stays unverified.
 - A `transfer` return (`-> transfer T`) moves ownership to the caller. The
   deallocator contract is settled (§4.2): the symbol carries a `release <symbol>`
   clause, the named `extern func` takes one borrowed `Ptr` and returns `Unit`,

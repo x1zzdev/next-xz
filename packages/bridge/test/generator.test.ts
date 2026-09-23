@@ -128,7 +128,7 @@ test("emits a release call around a transfer return", () => {
   const source = generateBinding(iface, options);
   assert.match(source, /const result = symbols\["strdup"\]!\(encodeStr\(s\)\) as XzPointerValue;/);
   assert.match(source, /try \{\n        return decodeStr\(result\);/);
-  assert.match(source, /finally \{\n        symbols\["free"\]!\(result\.ptr\);/);
+  assert.match(source, /finally \{\n        symbols\["free"\]!\(result\.address \?\? result\.ptr\);/);
 });
 
 test("rejects a Str field inside a @cstruct record", () => {
@@ -370,6 +370,48 @@ test("generated module copies a transferred Str and releases the original", asyn
     assert.equal(binding.strdup("source"), "copy");
     assert.equal(freed.length, 1);
     assert.deepEqual([...freed[0]!], [...encoder.encode("copy")]);
+    binding.close();
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("generated module releases the backend's original pointer, not its decoded bytes", async () => {
+  const iface = parseInterface(
+    `${FOREIGN}extern func free(ptr: Ptr) -> Unit\nextern func strdup(s: Str) -> transfer Str release free\n`,
+  );
+  const source = generateBinding(iface, { ...options, importFrom: bridgeEntry });
+
+  const dir = await mkdtemp(join(tmpdir(), "next-xz-gen-"));
+  try {
+    const file = join(dir, "liborder.ts");
+    await writeFile(file, source, "utf8");
+
+    const module = (await import(pathToFileURL(file).href)) as {
+      bind(backend: FfiBackend): {
+        strdup(s: string): string;
+        close(): void;
+      };
+    };
+
+    const opaque = { pointer: "raw" };
+    const freed: unknown[] = [];
+    const backend: FfiBackend = {
+      dlopen: () => ({
+        symbols: {
+          strdup: () => ({ ptr: new TextEncoder().encode("copy"), len: 4, address: opaque }),
+          free: (ptr: unknown) => {
+            freed.push(ptr);
+          },
+        },
+        close: () => {},
+      }),
+    };
+
+    const binding = module.bind(backend);
+    assert.equal(binding.strdup("source"), "copy");
+    assert.equal(freed.length, 1);
+    assert.equal(freed[0], opaque);
     binding.close();
   } finally {
     await rm(dir, { recursive: true, force: true });

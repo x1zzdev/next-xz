@@ -21,10 +21,25 @@ test("detectPlatform reports bun only when the Bun global is present", () => {
 });
 
 test("loadPlatformLibrary selects the koffi loader when Bun is absent", async () => {
+  let koffiInstalled = true;
+  try {
+    await import("koffi");
+  } catch {
+    koffiInstalled = false;
+  }
   await assert.rejects(
     loadPlatformLibrary(manifest(), { expectedXzVersion: "0.1.0" }),
-    (error: unknown) =>
-      error instanceof BridgeRuntimeError && error.message.includes("koffi"),
+    (error: unknown) => {
+      if (!koffiInstalled) {
+        return error instanceof BridgeRuntimeError && error.message.includes("koffi");
+      }
+      // koffi resolved, so the failure is the attempted dlopen of the missing
+      // library, not a missing-package error: dispatch reached the koffi loader.
+      return !(
+        error instanceof BridgeRuntimeError &&
+        error.message.includes("requires the 'koffi' package")
+      );
+    },
   );
 });
 
