@@ -118,7 +118,7 @@ The component contracts are specified in [ARCHITECTURE.md](ARCHITECTURE.md).
   files, implemented in `@xz-lang/bridge`. It consumes the same interface the
   existing `xz pkg gen --lang python` flow uses but does not become a CLI
   `--lang ts` target: the generated module depends on the bridge runtime (see
-  [docs/01-bridge.md](docs/01-bridge.md) §2.1).
+  [docs/01-bridge.md](docs/01-bridge.md) §2.2).
 - **P0** — Direct call path for Next.js Server Actions into compiled Xz shared
   libraries (`.so` / `.dylib` / `.dll`), using `bun:ffi` on Bun and a
   Node-compatible FFI (e.g. `koffi` / an N-API addon) on Node.
@@ -127,6 +127,10 @@ The component contracts are specified in [ARCHITECTURE.md](ARCHITECTURE.md).
   `Float`, `Char`, `Str`, `Bytes`, `Ptr`, `@cstruct record`; `Unit` return
   only). The bridge surfaces a clear error when a signature is not
   C-representable rather than silently degrading it.
+- **P0** — An `.xzint` declares its interface kind explicitly with a mandatory
+  `@interface export` or `@interface foreign` marker; ownership rules
+  (`transfer`, `release`) key off it rather than a per-file assumption. See
+  [docs/01-bridge.md](docs/01-bridge.md) §2.1.
 - **P1** — Zero-copy transfers between V8 `ArrayBuffer`/`TypedArray` and Xz
   `Str`/`Bytes`/`@cstruct` values.
 - **P1** — `Result`/`Option` marshalling. A C ABI export cannot carry a

@@ -49,7 +49,38 @@ consumes, plus the bridge-side `release` clause (§4.2), and:
   in a manifest and emits a `bind(backend)` factory (§6), so the same module
   loads on Bun or Node.
 
-### 2.1 Why the generator lives in the bridge
+### 2.1 Interface kind
+
+Every `.xzint` opens with exactly one interface-kind marker on its own line:
+
+```
+@interface export
+```
+
+```
+@interface foreign
+```
+
+The marker is the single source of truth for the ownership regime. It is not
+inferred from the declarations: both kinds declare functions with the same
+`extern func` syntax, so the keyword cannot tell them apart.
+
+- `@interface export` declares the C ABI surface an Xz shared library
+  **exports** — the signatures of the `@export` functions in a `.xz` source. A
+  parameter is borrowed and a return is retained by the library; `transfer` and
+  `release` are definition errors (§4.2).
+- `@interface foreign` declares a **foreign C library's** symbols, the form
+  `xz pkg add` distributes and `xz pkg gen --lang python` consumes. `transfer`
+  is legal in both directions, and a `transfer` return carries a
+  `release <symbol>` clause (§4.2).
+
+A file with no marker, or with more than one, is a definition error: the
+generator never guesses the boundary kind. The marker's grammar is owned by Xz
+(§8). This section specifies the marker before implementation: the parser,
+validator, and generator do not enforce it yet, so the current code still treats
+every interface as an `@interface export` surface.
+
+### 2.2 Why the generator lives in the bridge
 
 There is one TypeScript binding generator, and it is `@xz-lang/bridge`. The Xz
 CLI does not grow a `--lang ts` target.
@@ -141,23 +172,28 @@ Default (P0): encode/decode. `Str` crosses as UTF-8 bytes into an `XzStr`
 struct; the binding encodes on call and decodes on return. `Bytes` crosses as
 an `XzBytes` struct wrapping the caller's `Uint8Array` view.
 
-Ownership is explicit in the interface: a parameter is borrowed by default —
-the callee may not retain the pointer past the call. `transfer` is a C ABI
-ownership declaration ([Xz
+Ownership depends on the interface kind (§2.1). A parameter is borrowed by
+default — the callee may not retain the pointer past the call. `transfer` is a
+C ABI ownership declaration ([Xz
 docs/10](https://github.com/x1zzdev/Xz/blob/main/docs/10-ffi-interop.md)): it is
-legal only on a foreign `extern func` parameter, where the C callee takes
-ownership. A `.xzint` that describes an Xz library's `@export` functions cannot
-carry `transfer` in either direction — Xz forbids it on `@export` — so the
-generator rejects a `transfer` parameter rather than emit a handoff the Xz side
-cannot honor. (An interface that describes a foreign C library may legally
-declare it; distinguishing the two interface uses is an open dependency, §8.) A
-borrowed buffer is never handed to a callee that may retain it.
+legal only where a foreign C callee takes ownership.
+
+- In `@interface foreign` a `transfer` parameter is legal: the binding hands the
+  backing buffer to the C callee, which owns it afterward.
+- In `@interface export` a `transfer` parameter is a definition error: Xz
+  forbids `transfer` on `@export`, so the interface cannot describe an Xz
+  library that takes ownership from its C caller. The generator rejects it
+  rather than emit a handoff the Xz side cannot honor.
+
+A borrowed buffer is never handed to a callee that may retain it.
 
 A return is owned by the callee by default: the caller borrows it and must not
 free it. A `transfer` return (`-> transfer T`, [Xz
 docs/10](https://github.com/x1zzdev/Xz/blob/main/docs/10-ffi-interop.md)) moves
 ownership to the caller, so the caller must release the buffer through the
-library's deallocator. The interface names that deallocator on the symbol:
+library's deallocator. Only `@interface foreign` may declare one: Xz forbids a
+`transfer` return on `@export`, so in `@interface export` it is a definition
+error. The interface names the deallocator on the symbol:
 
 ```
 extern func free(ptr: Ptr) -> Unit
@@ -173,10 +209,11 @@ not `transfer` is a definition error: a buffer is never silently leaked or
 freed twice. Only a top-level `Str`/`Bytes` return has a release path; a
 pointer-carrying `@cstruct` handle return is still rejected (§4.4).
 
-The `release` clause is a bridge-side `.xzint` extension. The generator parses
-and emits it, but the grammar is owned by Xz (§2.1): the clause must be added to
-Xz docs/11, `validate_interface`, and `xz pkg gen --lang python` before an
-interface that uses it is portable to the CLI (§8).
+The `release` clause is a bridge-side `.xzint` extension that appears only in an
+`@interface foreign`. The generator parses and emits it, but the grammar is
+owned by Xz (§2.2): the clause must be added to Xz docs/11, `validate_interface`,
+and `xz pkg gen --lang python` before an interface that uses it is portable to
+the CLI (§8).
 
 `Str`/`Bytes` are marshalled at top level only. A `@cstruct` field of either
 type and by-value payloads remain hard errors until the generator emits their
@@ -311,20 +348,21 @@ more than once for the same reason. It also rejects a `@cstruct` name
 that collides with a built-in type name (`Bool`, `Int`, `usize`, `Float`,
 `Char`, `Str`, `Bytes`, `Ptr`, `Unit`): a reference to that name would silently
 resolve to the primitive and ignore the record, so the collision is a definition
-error. It also rejects a `transfer` parameter outright: `transfer` is a C ABI
-ownership declaration that Xz permits only on a foreign `extern func`, but a
-`.xzint` parameter describes an Xz `@export` function, which cannot accept
-ownership from the C caller. It still rejects a `transfer` return whose type is
-not pointer-carrying (`Str`, `Bytes`, `Ptr`, or a `@cstruct` record with a `Ptr`
-field), the compiler's ownership rule; a scalar has no ownership to transfer.
-It also checks the `release` clause of §4.2: the named symbol must be an
-`extern func` declared in the same interface with exactly one borrowed `Ptr`
-parameter and a `Unit` return, a `transfer` return must carry one, and a clause
-on a non-`transfer` return is a definition error. The bridge implements this
-clause ahead of Xz (it is a `.xzint` extension, §4.2), so a `transfer` return is
-accepted with a valid release symbol and rejected without one rather than
-leaked. `mut` and `transfer` are already mutually exclusive in the
-grammar. This is the
+error. A `transfer` parameter is accepted in an `@interface foreign` (a foreign C
+callee may take ownership) but rejected outright in an `@interface export` (§2.1,
+§4.2): Xz permits `transfer` only on a foreign `extern func`, and an `@export`
+function cannot accept ownership from the C caller. It rejects a `transfer`
+return whose type is not pointer-carrying (`Str`, `Bytes`, `Ptr`, or a `@cstruct`
+record with a `Ptr` field), the compiler's ownership rule; a scalar has no
+ownership to transfer, and a `transfer` return in an `@interface export` is a
+definition error regardless. It also checks the `release` clause of §4.2: the
+named symbol must be an `extern func` declared in the same interface with exactly
+one borrowed `Ptr` parameter and a `Unit` return, a `transfer` return must carry
+one, and a clause on a non-`transfer` return is a definition error. The bridge
+implements this clause ahead of Xz (it is a `.xzint` extension, §4.2), so a
+`transfer` return is accepted with a valid release symbol and rejected without
+one rather than leaked. `mut` and `transfer` are already mutually exclusive in
+the grammar. This is the
 same C-representability rule the compiler applies to `@export`. A `Str`/`Bytes`
 `@cstruct` field is C-representable and passes this check; the generator rejects
 it separately because the binding does not marshal it. `manifestFromInterface`
@@ -356,14 +394,15 @@ functions.
 
 ## 8. Open questions
 
-- Where the TypeScript generator lives is settled (§2.1): in
+- Where the TypeScript generator lives is settled (§2.2): in
   `@xz-lang/bridge`, not the Xz CLI.
 - Zero-copy ownership rules for retained pointers are expressed by the
   `transfer` parameter modifier on `extern func` ([Xz
   docs/10](https://github.com/x1zzdev/Xz/blob/main/docs/10-ffi-interop.md)).
-  The generator rejects `transfer` parameters because the `.xzint` boundary is
-  an Xz `@export` surface, which cannot take ownership; supporting a retained
-  handoff needs an Xz memory model that accepts the C caller's ownership (§4.2).
+  Whether a `transfer` is legal depends on the interface kind (§2.1): an
+  `@interface foreign` may declare one, an `@interface export` may not, because
+  an Xz `@export` surface cannot take ownership. Emitting a retained handoff
+  still needs a memory model that accepts the C caller's ownership (§4.2).
   Whether an FFI backend exposes a returned struct field as a byte view (rather
   than an opaque pointer) is unverified without a real `.so`; `koffi`/Bun smoke
   tests are outstanding.
@@ -372,14 +411,15 @@ functions.
   clause, the named `extern func` takes one borrowed `Ptr` and returns `Unit`,
   and the binding copies the returned buffer then frees it through that symbol.
   The bridge parser, validator, and generator implement the clause. Portability
-  is the open part: the grammar is owned by Xz (§2.1), so Xz docs/11, the CLI's
+  is the open part: the grammar is owned by Xz (§2.2), so Xz docs/11, the CLI's
   `validate_interface`, and `xz pkg gen --lang python` must accept the clause
   before an interface using it is portable; the Python wrapper still rejects a
   `transfer` return ([Xz
   docs/10](https://github.com/x1zzdev/Xz/blob/main/docs/10-ffi-interop.md)).
-- A `.xzint` can describe either an Xz `@export` boundary or a foreign C
-  library, and only the latter may carry `transfer`; nothing in the file marks
-  which it is. The release contract (§4.2) assumes the foreign-C
-  interpretation, so an interface-kind marker must be specified before the
-  distinction is enforced.
+- The interface-kind marker is settled (§2.1): a mandatory `@interface export`
+  or `@interface foreign` line states whether the file describes an Xz `@export`
+  surface or a foreign C library, and the ownership rules key off it. The marker
+  is a bridge-side extension ahead of the grammar owner; Xz docs/11 and
+  `validate_interface` must accept it (with the `release` clause) before an
+  interface that uses them is portable to the CLI.
 - Edge runtime requires Wasm, which changes the loading story entirely.

@@ -42,7 +42,8 @@ tooling that never ship to production.
 
 ### 2.1 `@xz-lang/bridge`
 
-Inputs: an `.xzint` interface file or a `.xz` source with `@export` functions.
+Inputs: an `.xzint` interface file (opened by a mandatory `@interface export` or
+`@interface foreign` marker) or a `.xz` source with `@export` functions.
 Outputs: a TypeScript module with typed functions and a loader.
 
 ```ts
@@ -58,8 +59,13 @@ Rules:
 
 - Only `@export` symbols are bound. Non-exported functions keep internal
   linkage and are unreachable.
+- The interface-kind marker decides the ownership regime: `@interface export`
+  is an Xz `@export` surface (borrowed parameters, retained returns, no
+  `transfer`), `@interface foreign` is a foreign C library (`transfer` and
+  `release` allowed). The kind is never inferred from the declarations. See
+  [docs/01-bridge.md](docs/01-bridge.md) §2.1.
 - The generator lives in `@xz-lang/bridge` and is canonical; the Xz CLI does
-  not emit TypeScript (see [docs/01-bridge.md](docs/01-bridge.md) §2.1). It
+  not emit TypeScript (see [docs/01-bridge.md](docs/01-bridge.md) §2.2). It
   mirrors `xz bind --lang python`: it reads the same `@export` signatures and
   `@cstruct` records, and emits a wrapper named after the source stem.
 - A signature that is not C-representable is a generator error, not a warning.
