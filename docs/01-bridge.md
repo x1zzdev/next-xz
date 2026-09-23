@@ -50,11 +50,14 @@ consumes, plus the bridge-side `release` clause (§4.2), and:
   loads on Bun or Node.
 
 The accepted surface is declaration-only: an interface marker, `extern func`
-signatures, and `@cstruct record` declarations, matching the rule Xz's
-`validate_interface` enforces. The bridge lexer and parser reject anything else
-— another declaration form (`func`/`record`/`enum`/`task`/`chan`), a function
-body, or a numeric/string/char literal — as a parse error. That rejection is
-deliberate, not a gap to relax: a literal or a body has no place in a C ABI
+signatures, `@cstruct record` declarations, and an interface-level `@error
+Name = code` map, matching the rule Xz's `validate_interface` enforces. The
+bridge lexer and parser reject anything else — another declaration form
+(`func`/`record`/`enum`/`task`/`chan`), a function body, or a string/char
+literal — as a parse error. A numeric literal is accepted only as the code of
+an `@error` line or a `contract ok` clause (§5); it is a status code, which is
+an ABI fact, and rejected anywhere else. That rejection is deliberate, not a
+gap to relax: a body or an unrelated literal has no place in a C ABI
 description, so the subset stays closed until the grammar owner widens the
 interface surface.
 
@@ -136,7 +139,9 @@ is what the generator records alongside the `.so`; the loader never guesses a
 layout from source. A `mut` parameter is recorded as a pointer (`T*`), matching
 the C in/out convention. A symbol with a `transfer` return also records its
 `release` symbol name, so a consumer that reads only the manifest still sees
-who owns the returned buffer and how it is freed (§4.2).
+who owns the returned buffer and how it is freed (§4.2). A contracted symbol
+(§5.1) records a `contract` descriptor — the ok status code, the `mut`
+out-parameter name, and the `@error` names — for the same reason.
 
 The signature is expressed in backend-neutral FFI types (`bool`, `int64`,
 `uint64`, `double`, `char`, `ptr`, `void`, and named structs), so the Bun and
@@ -347,12 +352,51 @@ preference:
 
 The bridge always surfaces the mapping in the generated TypeScript signature,
 so a caller cannot forget to check it. The runtime primitives are
-`runContracted(descriptor, invoke, readValue)` and the `XzContractError` it
-throws: `invoke` performs the raw call and returns the status code, `readValue`
-recovers the out-parameter, and a status other than `descriptor.okCode` raises
-with the declared error name (or the bare numeric code when none is declared).
-A reader that runs only on the ok path means the out value is never trusted
-after an error.
+`runContracted(descriptor, invoke, readValue)`,
+`asStatusCode(status)`, and the `XzContractError` it throws: `invoke` performs
+the raw call and returns the status code, `readValue` recovers the out-parameter,
+and a status other than `descriptor.okCode` raises with the declared error name
+(or the bare numeric code when none is declared). A reader that runs only on the
+ok path means the out value is never trusted after an error.
+
+### 5.1 Contract clause in `.xzint`
+
+The interface spells pattern 1 on the symbol and, when it has named errors, on
+the file:
+
+```
+@interface export
+
+@error InvalidAmount = 1
+@error Overflow = 2
+
+extern func parse_amount(text: Str, mut out: Float) -> Int contract ok 0
+```
+
+- `contract ok <code>` marks the symbol as a contracted wrapper and fixes the
+  status code that means ok. Its return must be `Int`/`usize`, it must declare
+  exactly one `mut` out-parameter, and it cannot also be a `transfer` return.
+- Each `@error Name = code` line names a non-ok status. Names and codes are
+  unique across the interface, and a code may not equal any contracted symbol's
+  ok code. The map is interface-scoped; a contracted symbol carries the whole
+  map in its descriptor.
+- The Xz side stays hand-written: the wrapper function with its `@intent`/
+  `@effects` contract is the Xz source, and `.xzint` describes only the C ABI
+  it presents.
+
+The generator emits one out-slot per scalar out-parameter (`Bool`, `Int`,
+`usize`, `Float`, `Char`), passes it as the `mut` pointer, and reads it on the
+ok path. The TypeScript binding omits the out-parameter from its signature and
+returns the out value instead. It records the descriptor in the manifest
+(§3.1), so a manifest-only consumer sees the ok code, the out-parameter name,
+and the error names. An out-parameter of any other type (a `@cstruct`, `Str`,
+`Bytes`, or `Ptr`) is a hard error, as is a `mut` parameter without a `contract`
+clause.
+
+`@error` and `contract` are bridge-side `.xzint` extensions ahead of the grammar
+owner: like the `release` clause and the `@interface` marker, Xz docs/11,
+`validate_interface`, and `xz pkg gen --lang python` must accept them before an
+interface that uses them is portable to the CLI (§8).
 
 ## 6. Generated module shape
 
@@ -419,8 +463,9 @@ faithfully: scalars (`Bool`, `Int`, `usize`, `Float`, `Char`), `Ptr`,
 borrowed for the call, §4.2). Each `Int`/`usize` argument and return is passed
 through `asXzInt` (§4.1), and every `Int`/`usize` field of a `@cstruct` argument
 or return is normalized the same way (§4.3), so the boundary always hands back a
-`bigint` rather than a possibly-rounded `number`. `mut` out-parameters (the `Result` contract
-wrapper, §5), a `transfer` parameter that is not a top-level `Str`/`Bytes`, a
+`bigint` rather than a possibly-rounded `number`. A contracted wrapper emits its
+scalar `mut` out-parameter (§5.1); a `mut` parameter without a `contract` clause,
+a `transfer` parameter that is not a top-level `Str`/`Bytes`, a
 `transfer` return without a declared `release` symbol, `Str`/`Bytes` as
 `@cstruct` fields, and by-value payloads are hard errors, not lossy output,
 until the generator emits their marshalling.
@@ -528,3 +573,13 @@ functions.
   surface. The bridge supports scalar signatures and rejects the rest rather
   than invent a layout; auto-fetch on Edge (`loadPlatformLibrary`) awaits the
   artifact.
+- The `Result` contract descriptor source is settled (§5.1): the `.xzint`
+  carries `contract ok <code>` on the symbol and `@error Name = code` on the
+  file, and the generator emits and records the descriptor. The runtime path is
+  verified against a real `.so` on Node/koffi (ok value read back, non-ok status
+  raised with the declared name). Portability is the open part: `@error` and the
+  `contract` clause are bridge-side extensions, so Xz docs/11,
+  `validate_interface`, and `xz pkg gen --lang python` must accept them before
+  an interface that uses them is portable. Only scalar out-parameters are
+  marshalled; a `@cstruct`, `Str`, `Bytes`, or `Ptr` out-parameter is a hard
+  error until a slot/read path exists for it.
