@@ -34,6 +34,7 @@ export interface ExternFunc {
   readonly params: readonly Param[];
   readonly returnType: XzType;
   readonly transferReturn: boolean;
+  readonly release?: string;
 }
 
 export interface Field {

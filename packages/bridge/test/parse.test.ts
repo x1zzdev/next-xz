@@ -62,6 +62,20 @@ test("defaults transferReturn to false", () => {
   assert.equal(iface.funcs[0]?.transferReturn, false);
 });
 
+test("parses a release symbol on a transfer return", () => {
+  const iface = parseInterface(
+    "extern func free(ptr: Ptr) -> Unit\nextern func strdup(s: Str) -> transfer Str release free\n",
+  );
+  assert.equal(iface.funcs[1]?.transferReturn, true);
+  assert.equal(iface.funcs[1]?.release, "free");
+  assert.deepEqual(iface.funcs[1]?.returnType, { kind: "named", name: "Str" });
+});
+
+test("defaults a missing release symbol to absent", () => {
+  const iface = parseInterface("extern func read(path: Str) -> transfer Str\n");
+  assert.equal(iface.funcs[0]?.release, undefined);
+});
+
 test("parses generic type arguments as non-C-representable shape", () => {
   const iface = parseInterface("extern func f(x: Result[Int, Int]) -> Int\n");
   assert.deepEqual(iface.funcs[0]?.params[0]?.type, {

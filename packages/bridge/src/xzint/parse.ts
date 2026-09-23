@@ -87,14 +87,21 @@ class Parser {
     this.expect("rparen");
     let returnType: XzType = UNIT;
     let transferReturn = false;
+    let release: string | undefined;
     if (this.match("arrow")) {
       if (this.atIdent("transfer")) {
         this.advance();
         transferReturn = true;
       }
       returnType = this.parseType();
+      if (this.atIdent("release")) {
+        this.advance();
+        release = this.expectIdent();
+      }
     }
-    return { name, params, returnType, transferReturn };
+    return release === undefined
+      ? { name, params, returnType, transferReturn }
+      : { name, params, returnType, transferReturn, release };
   }
 
   private parseParam(): Param {
