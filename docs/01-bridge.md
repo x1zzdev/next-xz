@@ -289,6 +289,15 @@ marshalling.
 Generated as a TypeScript interface with the same field order and alignment
 semantics. Nested `@cstruct` records nest as objects.
 
+An `Int`/`usize` field is normalized by `asXzInt` exactly like a top-level
+integer, because the interface promises `bigint` while a backend may report a
+small field as `number`. A record that transitively contains a 64-bit field gets
+a generated `normalize<Record>` helper, applied to every parameter and return of
+that type: it rebuilds the object with each `Int`/`usize` field widened and each
+nested record normalized. A record with no such field crosses unchanged. The
+guarantee is the binding's, not the backend's — `koffi`, for one, reports small
+64-bit values as `number`.
+
 ### 4.4 Handles
 
 A `@cstruct` containing a `Ptr` is a handle type: never copied, handed off only
@@ -397,8 +406,9 @@ The current generator emits bindings only for signatures it can marshal
 faithfully: scalars (`Bool`, `Int`, `usize`, `Float`, `Char`), `Ptr`,
 `@cstruct` records of those, and top-level `Str`/`Bytes` (encode/decode,
 borrowed for the call, §4.2). Each `Int`/`usize` argument and return is passed
-through `asXzInt` (§4.1), so the boundary always hands back a `bigint` rather
-than a possibly-rounded `number`. `mut` out-parameters (the `Result` contract
+through `asXzInt` (§4.1), and every `Int`/`usize` field of a `@cstruct` argument
+or return is normalized the same way (§4.3), so the boundary always hands back a
+`bigint` rather than a possibly-rounded `number`. `mut` out-parameters (the `Result` contract
 wrapper, §5), a `transfer` parameter that is not a top-level `Str`/`Bytes`, a
 `transfer` return without a declared `release` symbol, `Str`/`Bytes` as
 `@cstruct` fields, and by-value payloads are hard errors, not lossy output,

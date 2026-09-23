@@ -209,7 +209,7 @@ test("casts each symbol call to the declared TypeScript return type", () => {
   );
   const source = generateBinding(iface, options);
   assert.match(source, /return asXzInt\(symbols\["add"\]!\(asXzInt\(a\), asXzInt\(b\)\)\);/);
-  assert.match(source, /return asXzInt\(symbols\["sum"\]!\(v\)\);/);
+  assert.match(source, /return asXzInt\(symbols\["sum"\]!\(normalizeVec2\(v\)\)\);/);
   assert.match(source, /symbols\["run"\]!\(\);/);
 });
 
@@ -421,6 +421,76 @@ test("generated module releases the backend's original pointer, not its decoded 
     assert.equal(binding.strdup("source"), "copy");
     assert.equal(freed.length, 1);
     assert.equal(freed[0], opaque);
+    binding.close();
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("normalizes Int/usize fields of a @cstruct parameter and return", () => {
+  const iface = parseInterface(
+    `${EXPORT}@cstruct record Point {\n    x: Int\n    scale: Float\n}\n@cstruct record Line {\n    a: Point\n    b: Point\n}\nextern func sum(v: Line) -> Line\n`,
+  );
+  const source = generateBinding(iface, options);
+  assert.match(
+    source,
+    /function normalizePoint\(value: Point\): Point \{\n  return \{\n    \.\.\.value,\n    x: asXzInt\(value\.x\),\n  \};/,
+  );
+  assert.match(source, /function normalizeLine\(value: Line\): Line \{\n  return \{\n    \.\.\.value,\n    a: normalizePoint\(value\.a\),\n    b: normalizePoint\(value\.b\),/);
+  assert.match(source, /return normalizeLine\(symbols\["sum"\]!\(normalizeLine\(v\)\) as Line\);/);
+});
+
+test("leaves a @cstruct without a 64-bit integer field unnormalized", () => {
+  const iface = parseInterface(
+    `${EXPORT}@cstruct record Pt {\n    x: Float\n    y: Float\n}\nextern func f(p: Pt) -> Pt\n`,
+  );
+  const source = generateBinding(iface, options);
+  assert.doesNotMatch(source, /normalizePt/);
+  assert.doesNotMatch(source, /asXzInt/);
+  assert.match(source, /return symbols\["f"\]!\(p\) as Pt;/);
+});
+
+test("normalizes @cstruct fields to bigint on the way in and out at runtime", async () => {
+  const iface = parseInterface(
+    `${EXPORT}@cstruct record Point {\n    x: Int\n    y: Int\n}\nextern func shift(p: Point) -> Point\n`,
+  );
+  const source = generateBinding(iface, { ...options, importFrom: bridgeEntry });
+
+  const dir = await mkdtemp(join(tmpdir(), "next-xz-gen-"));
+  try {
+    const file = join(dir, "liborder.ts");
+    await writeFile(file, source, "utf8");
+
+    const module = (await import(pathToFileURL(file).href)) as {
+      bind(backend: FfiBackend): {
+        shift(p: { x: bigint; y: bigint }): { x: bigint; y: bigint };
+        close(): void;
+      };
+    };
+
+    const seen: unknown[] = [];
+    const backend: FfiBackend = {
+      dlopen: () => ({
+        symbols: {
+          shift: (p: unknown) => {
+            seen.push(p);
+            return { x: 7, y: 9007199254740993n };
+          },
+        },
+        close: () => {},
+      }),
+    };
+
+    const binding = module.bind(backend);
+    const result = binding.shift({ x: 3, y: 4 } as unknown as { x: bigint; y: bigint });
+    assert.deepEqual(seen, [{ x: 3n, y: 4n }], "safe-integer numbers widen to bigint before the call");
+    assert.equal(result.x, 7n, "a backend number field is widened on the way out");
+    assert.equal(result.y, 9007199254740993n, "a bigint field above 2^53 is preserved");
+    assert.throws(
+      () => binding.shift({ x: 2 ** 53, y: 0n } as unknown as { x: bigint; y: bigint }),
+      /expected a 64-bit integer/,
+      "an unsafe number field is a hard error",
+    );
     binding.close();
   } finally {
     await rm(dir, { recursive: true, force: true });
