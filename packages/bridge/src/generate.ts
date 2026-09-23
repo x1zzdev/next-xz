@@ -44,7 +44,7 @@ export function generateBinding(iface: Interface, options: GenerateOptions): str
   lines.push("");
   lines.push(...emitBindingInterface(iface, names));
   lines.push("");
-  lines.push(...emitBindFunction(iface, names, needs));
+  lines.push(...emitBindFunction(iface, names));
   lines.push("");
   return lines.join("\n");
 }
@@ -64,18 +64,9 @@ function assertGeneratable(
         `symbol '${func.name}': mutable parameter '${param.name}' has no generated binding yet; the contract wrapper pattern (docs/01 section 5) is not emitted from .xzint`,
       );
     }
-    if (param.transfer && !isBufferType(param.type)) {
-      throw new BridgeDefinitionError(
-        `symbol '${func.name}': parameter '${param.name}' is declared 'transfer'; ownership handoff is emitted only for Str and Bytes buffers, which the binding can retain`,
-      );
-    }
     assertMarshallable(func.name, param.type, cstructs, "param");
   }
   assertMarshallable(func.name, func.returnType, cstructs, "return");
-}
-
-function isBufferType(type: XzType): boolean {
-  return type.kind === "named" && (type.name === "Str" || type.name === "Bytes");
 }
 
 function assertMarshallable(
@@ -154,7 +145,6 @@ interface MarshallingNeeds {
   decodeStr: boolean;
   decodeBytes: boolean;
   pointerValue: boolean;
-  retention: boolean;
 }
 
 function collectMarshalling(iface: Interface): MarshallingNeeds {
@@ -164,13 +154,11 @@ function collectMarshalling(iface: Interface): MarshallingNeeds {
     decodeStr: false,
     decodeBytes: false,
     pointerValue: false,
-    retention: false,
   };
   for (const func of iface.funcs) {
     for (const param of func.params) {
       if (isNamed(param.type, "Str")) needs.encodeStr = true;
       if (isNamed(param.type, "Bytes")) needs.encodeBytes = true;
-      if (param.transfer) needs.retention = true;
     }
     if (isNamed(func.returnType, "Str")) {
       needs.decodeStr = true;
@@ -199,11 +187,7 @@ function emitImport(needs: MarshallingNeeds, module: string): string {
   return `import { ${[...values, ...types].join(", ")} } from ${JSON.stringify(module)};`;
 }
 
-function emitBindFunction(
-  iface: Interface,
-  names: ReadonlySet<string>,
-  needs: MarshallingNeeds,
-): string[] {
+function emitBindFunction(iface: Interface, names: ReadonlySet<string>): string[] {
   const lines = ["export function bind(backend: FfiBackend): Binding {"];
   lines.push("  return createBinding(");
   lines.push("    loadLibrary(manifest, { expectedXzVersion: manifest.xzVersion, backend }),");
@@ -220,19 +204,12 @@ function emitBindFunction(
   lines.push(
     "  const symbols = loaded.symbols as Readonly<Record<string, (...args: unknown[]) => unknown>>;",
   );
-  if (needs.retention) {
-    lines.push("  const retained: Uint8Array[] = [];");
-  }
   lines.push("  return {");
   for (const func of iface.funcs) {
     const params = func.params.map((param) => param.name).join(", ");
-    const preamble: string[] = [];
-    const args = func.params.map((param) => emitArgument(param, preamble));
+    const args = func.params.map(emitArgument);
     const call = `symbols[${JSON.stringify(func.name)}]!(${args.join(", ")})`;
     lines.push(`    ${func.name}(${params}) {`);
-    for (const line of preamble) {
-      lines.push(`      ${line}`);
-    }
     if (isNamed(func.returnType, "Str")) {
       lines.push(`      return decodeStr(${call} as XzPointerValue);`);
     } else if (isNamed(func.returnType, "Bytes")) {
@@ -246,9 +223,6 @@ function emitBindFunction(
     lines.push("    },");
   }
   lines.push("    close: () => {");
-  if (needs.retention) {
-    lines.push("      retained.length = 0;");
-  }
   lines.push("      loaded.close();");
   lines.push("    },");
   lines.push("  };");
@@ -256,21 +230,11 @@ function emitBindFunction(
   return lines;
 }
 
-function emitArgument(param: Param, preamble: string[]): string {
+function emitArgument(param: Param): string {
   if (isNamed(param.type, "Str")) {
-    if (param.transfer) {
-      preamble.push(`const ${param.name}Pointer = encodeStr(${param.name});`);
-      preamble.push(`retained.push(${param.name}Pointer.ptr);`);
-      return `${param.name}Pointer`;
-    }
     return `encodeStr(${param.name})`;
   }
   if (isNamed(param.type, "Bytes")) {
-    if (param.transfer) {
-      preamble.push(`const ${param.name}Pointer = encodeBytes(${param.name});`);
-      preamble.push(`retained.push(${param.name}Pointer.ptr);`);
-      return `${param.name}Pointer`;
-    }
     return `encodeBytes(${param.name})`;
   }
   return param.name;

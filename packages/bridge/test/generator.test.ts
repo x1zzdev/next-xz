@@ -73,26 +73,15 @@ test("rejects a mutable parameter until the contract wrapper is emitted", () => 
   );
 });
 
-test("emits ownership handoff that retains the backing buffer for transfer", () => {
+test("rejects a transfer parameter the exported boundary cannot carry", () => {
   const iface = parseInterface(
     "extern func write(transfer frame: Bytes) -> Int\nextern func send(transfer text: Str)\n",
   );
-  const source = generateBinding(iface, options);
-  assert.match(source, /const retained: Uint8Array\[\] = \[\];/);
-  assert.match(source, /const framePointer = encodeBytes\(frame\);/);
-  assert.match(source, /retained\.push\(framePointer\.ptr\);/);
-  assert.match(source, /return symbols\["write"\]!\(framePointer\) as number;/);
-  assert.match(source, /const textPointer = encodeStr\(text\);/);
-  assert.match(source, /retained\.push\(textPointer\.ptr\);/);
-  assert.match(source, /retained\.length = 0;/);
-});
-
-test("rejects a transfer parameter that is not a buffer", () => {
-  const iface = parseInterface("extern func take(transfer amount: Int) -> Int\n");
   assert.throws(
     () => generateBinding(iface, options),
     (error: unknown) =>
-      error instanceof BridgeDefinitionError && error.message.includes("transfer"),
+      error instanceof BridgeDefinitionError &&
+      error.message.includes("C ABI ownership declaration"),
   );
 });
 
@@ -220,9 +209,9 @@ test("generated module loads, calls a symbol, and closes through an injected bac
   }
 });
 
-test("generated module marshals Str/Bytes and holds transferred buffers until close", async () => {
+test("generated module marshals Str/Bytes through the injected backend", async () => {
   const iface = parseInterface(
-    "extern func hash(data: Bytes) -> Int\nextern func write(transfer frame: Bytes) -> Unit\nextern func greet(name: Str) -> Str\n",
+    "extern func hash(data: Bytes) -> Int\nextern func greet(name: Str) -> Str\n",
   );
   const source = generateBinding(iface, { ...options, importFrom: bridgeEntry });
 
@@ -234,7 +223,6 @@ test("generated module marshals Str/Bytes and holds transferred buffers until cl
     const module = (await import(pathToFileURL(file).href)) as {
       bind(backend: FfiBackend): {
         hash(data: Uint8Array): number;
-        write(frame: Uint8Array): void;
         greet(name: string): string;
         close(): void;
       };
@@ -247,10 +235,6 @@ test("generated module marshals Str/Bytes and holds transferred buffers until cl
           hash: (value: { ptr: Uint8Array; len: number }) => {
             seen.push(value);
             return value.len;
-          },
-          write: (value: { ptr: Uint8Array; len: number }) => {
-            seen.push(value);
-            return undefined;
           },
           greet: (value: { ptr: Uint8Array; len: number }) => {
             seen.push(value);
@@ -266,12 +250,8 @@ test("generated module marshals Str/Bytes and holds transferred buffers until cl
     assert.equal(binding.hash(borrowed), 3);
     assert.equal(seen[0]?.ptr, borrowed);
 
-    const transferred = new Uint8Array([4, 5]);
-    binding.write(transferred);
-    assert.equal(seen[1]?.ptr, transferred);
-
     assert.equal(binding.greet("héllo"), "hello");
-    assert.deepEqual([...seen[2]!.ptr], [...new TextEncoder().encode("héllo")]);
+    assert.deepEqual([...seen[1]!.ptr], [...new TextEncoder().encode("héllo")]);
 
     binding.close();
   } finally {

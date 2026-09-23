@@ -141,7 +141,7 @@ test("formats a problem with symbol, location, and reason", () => {
   assert.match(message, /unknown type 'Missing'/);
 });
 
-test("accepts transfer of pointer-carrying types", () => {
+test("rejects a transfer parameter on the exported boundary", () => {
   const iface = parseInterface(
     [
       "@cstruct record Buffer { ptr: Ptr size: Int }",
@@ -151,28 +151,27 @@ test("accepts transfer of pointer-carrying types", () => {
       "extern func fill(transfer buffer: Buffer)",
     ].join("\n"),
   );
-  assert.deepEqual(validateInterface(iface), []);
-});
-
-test("flags transfer of a scalar as not pointer-carrying", () => {
-  const iface = parseInterface("extern func take(transfer amount: Int) -> Int\n");
   const problems = validateInterface(iface);
-  assert.equal(problems.length, 1);
-  assert.equal(problems[0]?.kind, "ownership");
-  assert.equal(problems[0]?.symbol, "take");
-  assert.equal(problems[0]?.position, "param");
-  assert.deepEqual(problems[0]?.path, ["amount"]);
-  assert.match(formatInterfaceProblem(problems[0]!), /parameter 'amount' of type 'Int'/);
-  assert.match(formatInterfaceProblem(problems[0]!), /pointer-carrying type/);
-});
-
-test("flags transfer of a @cstruct without a Ptr field", () => {
-  const iface = parseInterface(
-    "@cstruct record Vec2 { x: Float y: Float }\nextern func take(transfer v: Vec2) -> Int\n",
+  assert.equal(problems.length, 4);
+  assert.ok(
+    problems.every((problem) => problem.kind === "ownership" && problem.position === "param"),
   );
-  const problems = validateInterface(iface);
-  assert.equal(problems.length, 1);
-  assert.equal(problems[0]?.kind, "ownership");
+  assert.match(formatInterfaceProblem(problems[0]!), /parameter 'frame' of type 'Bytes'/);
+  assert.match(formatInterfaceProblem(problems[0]!), /C ABI ownership declaration/);
+});
+
+test("rejects a transfer parameter regardless of its type", () => {
+  for (const source of [
+    "extern func take(transfer amount: Int) -> Int\n",
+    "extern func f(transfer v: Result[Int, Int]) -> Int\n",
+    "extern func f(transfer v: Missing) -> Int\n",
+  ]) {
+    const problems = validateInterface(parseInterface(source));
+    assert.ok(
+      problems.some((problem) => problem.kind === "ownership" && problem.position === "param"),
+      source,
+    );
+  }
 });
 
 test("flags a transfer return that is not pointer-carrying", () => {
@@ -184,7 +183,7 @@ test("flags a transfer return that is not pointer-carrying", () => {
   assert.match(formatInterfaceProblem(problems[0]!), /return type of type 'Int'/);
 });
 
-test("flags a parameter that combines mut and transfer", () => {
+test("rejects a parameter that combines mut and transfer", () => {
   const iface: Interface = {
     cstructs: [],
     funcs: [
@@ -199,12 +198,12 @@ test("flags a parameter that combines mut and transfer", () => {
   const problems = validateInterface(iface);
   assert.equal(problems.length, 1);
   assert.equal(problems[0]?.kind, "ownership");
-  assert.match(formatInterfaceProblem(problems[0]!), /cannot combine 'mut' and 'transfer'/);
+  assert.match(formatInterfaceProblem(problems[0]!), /C ABI ownership declaration/);
 });
 
-test("does not flag a generic or unknown type twice for transfer", () => {
+test("reports transfer and a non-representable type as separate problems", () => {
   const generic = validateInterface(parseInterface("extern func f(transfer v: Result[Int, Int]) -> Int\n"));
-  assert.deepEqual(generic.map((problem) => problem.kind), ["generic"]);
+  assert.deepEqual(generic.map((problem) => problem.kind), ["generic", "ownership"]);
   const unknown = validateInterface(parseInterface("extern func f(transfer v: Missing) -> Int\n"));
-  assert.deepEqual(unknown.map((problem) => problem.kind), ["unknown"]);
+  assert.deepEqual(unknown.map((problem) => problem.kind), ["unknown", "ownership"]);
 });

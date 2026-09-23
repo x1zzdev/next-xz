@@ -127,14 +127,15 @@ struct; the binding encodes on call and decodes on return. `Bytes` crosses as
 an `XzBytes` struct wrapping the caller's `Uint8Array` view.
 
 Ownership is explicit in the interface: a parameter is borrowed by default —
-the callee may not retain the pointer past the call — and an `extern func`
-parameter marked `transfer` moves ownership to the callee
-([Xz docs/10](https://github.com/x1zzdev/Xz/blob/main/docs/10-ffi-interop.md)).
-The generated binding wraps the view for the call and, for `transfer`, retains
-the backing buffer on the binding until `close()`: the buffer is never copied,
-and it stays alive as long as the callee may hold the pointer. It never passes
-a borrowed buffer to a callee that may retain it, and it rejects a `transfer`
-of a non-buffer type.
+the callee may not retain the pointer past the call. `transfer` is a C ABI
+ownership declaration ([Xz
+docs/10](https://github.com/x1zzdev/Xz/blob/main/docs/10-ffi-interop.md)): it is
+legal only on a foreign `extern func` parameter, where the C callee takes
+ownership. A `.xzint` declares the boundary of an Xz library's `@export`
+functions, and Xz forbids `transfer` on those — the C caller cannot hand
+ownership to Xz — so the generator rejects a `transfer` parameter rather than
+emit a handoff the Xz side cannot honor. A borrowed buffer is never handed to a
+callee that may retain it.
 
 A return is owned by the callee by default: the caller borrows it and must not
 free it. A `transfer` return (`-> transfer T`, [Xz
@@ -145,8 +146,8 @@ release the original, so it rejects a `transfer` return rather than leak the
 buffer.
 
 `Str`/`Bytes` are marshalled at top level only. A `@cstruct` field of either
-type, a `Ptr` or handle record handed off with `transfer`, and by-value payloads
-remain hard errors until the generator emits their marshalling.
+type and by-value payloads remain hard errors until the generator emits their
+marshalling.
 
 ### 4.3 `@cstruct`
 
@@ -156,8 +157,9 @@ semantics. Nested `@cstruct` records nest as objects.
 ### 4.4 Handles
 
 A `@cstruct` containing a `Ptr` is a handle type: never copied, handed off only
-with `transfer`. The TypeScript binding exposes it as an opaque object whose
-methods route back into the library; it is not a plain value object.
+with `transfer` (not yet emitted; the generator rejects `transfer`, §4.2). The
+TypeScript binding exposes it as an opaque object whose methods route back into
+the library; it is not a plain value object.
 
 ## 5. The `Result` problem
 
@@ -256,11 +258,11 @@ function createBinding(loaded: LoadedLibrary): Binding {
 
 The current generator emits bindings only for signatures it can marshal
 faithfully: scalars (`Bool`, `Int`, `usize`, `Float`, `Char`), `Ptr`,
-`@cstruct` records of those, and top-level `Str`/`Bytes` (encode/decode, with
-`transfer` parameter retention per §4.2). `mut` out-parameters (the `Result`
-contract wrapper, §5), `Str`/`Bytes` as `@cstruct` fields, a `transfer` return,
-and `transfer` of `Ptr` or a handle record are hard errors, not lossy output,
-until the generator emits their marshalling.
+`@cstruct` records of those, and top-level `Str`/`Bytes` (encode/decode,
+borrowed for the call, §4.2). `mut` out-parameters (the `Result` contract
+wrapper, §5), a `transfer` parameter or return, `Str`/`Bytes` as `@cstruct`
+fields, and by-value payloads are hard errors, not lossy output, until the
+generator emits their marshalling.
 
 Before it emits anything, the generator validates the whole interface in one
 pass: `validateInterface` reports every declaration that is not C-representable
@@ -272,13 +274,14 @@ more than once for the same reason. It also rejects a `@cstruct` name
 that collides with a built-in type name (`Bool`, `Int`, `usize`, `Float`,
 `Char`, `Str`, `Bytes`, `Ptr`, `Unit`): a reference to that name would silently
 resolve to the primitive and ignore the record, so the collision is a definition
-error. It also rejects a `transfer` parameter or return whose type is not
-pointer-carrying (`Str`, `Bytes`, `Ptr`, or a `@cstruct` record with a `Ptr`
-field), the compiler's ownership rule; a scalar has no ownership to transfer, and
-the manifest path would otherwise drop the modifier silently. `mut` and
-`transfer` are already mutually exclusive in the grammar, so no interface the
-parser accepts combines them. This is the same
-C-representability rule the compiler applies to `@export`. A `Str`/`Bytes`
+error. It also rejects a `transfer` parameter outright: `transfer` is a C ABI
+ownership declaration that Xz permits only on a foreign `extern func`, but a
+`.xzint` parameter describes an Xz `@export` function, which cannot accept
+ownership from the C caller. It still rejects a `transfer` return whose type is
+not pointer-carrying (`Str`, `Bytes`, `Ptr`, or a `@cstruct` record with a `Ptr`
+field), the compiler's ownership rule; a scalar has no ownership to transfer.
+`mut` and `transfer` are already mutually exclusive in the grammar. This is the
+same C-representability rule the compiler applies to `@export`. A `Str`/`Bytes`
 `@cstruct` field is C-representable and passes this check; the generator rejects
 it separately because the binding does not marshal it. `manifestFromInterface`
 runs the same pass and refuses to build a symbol table from an interface with any
@@ -314,10 +317,12 @@ functions.
 - Zero-copy ownership rules for retained pointers are expressed by the
   `transfer` parameter modifier on `extern func` ([Xz
   docs/10](https://github.com/x1zzdev/Xz/blob/main/docs/10-ffi-interop.md)).
-  The binding now emits the handoff for top-level `Str`/`Bytes` by retaining the
-  caller's buffer until `close()` (§4.2). Whether an FFI backend exposes a
-  returned struct field as a byte view (rather than an opaque pointer) is
-  unverified without a real `.so`; `koffi`/Bun smoke tests are outstanding.
+  The generator rejects `transfer` parameters because the `.xzint` boundary is
+  an Xz `@export` surface, which cannot take ownership; supporting a retained
+  handoff needs an Xz memory model that accepts the C caller's ownership (§4.2).
+  Whether an FFI backend exposes a returned struct field as a byte view (rather
+  than an opaque pointer) is unverified without a real `.so`; `koffi`/Bun smoke
+  tests are outstanding.
 - A `transfer` return (`-> transfer T`) moves ownership to the caller, but the
   binding has no library deallocator to release a returned buffer, so it rejects
   the modifier (as the Python wrapper does). Honoring it needs a declared

@@ -83,18 +83,17 @@ export function validateInterface(iface: Interface): readonly InterfaceProblem[]
     }
     funcNames.add(func.name);
     for (const param of func.params) {
-      const representable = checkType(records, param.type, func.name, "param", [param.name], problems);
-      if (param.mutable && param.transfer) {
+      checkType(records, param.type, func.name, "param", [param.name], problems);
+      if (param.transfer) {
         problems.push({
           kind: "ownership",
           symbol: func.name,
           position: "param",
           path: [param.name],
           type: renderXzType(param.type),
-          reason: "a parameter cannot combine 'mut' and 'transfer'",
+          reason:
+            "'transfer' is a C ABI ownership declaration and cannot cross an Xz '@export' boundary; declare it only on a foreign 'extern func'",
         });
-      } else if (param.transfer && representable) {
-        checkTransfer(records, param.type, func.name, "param", [param.name], problems);
       }
     }
     const returnRepresentable = checkType(records, func.returnType, func.name, "return", [], problems);
