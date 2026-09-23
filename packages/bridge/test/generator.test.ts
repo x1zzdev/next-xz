@@ -68,12 +68,49 @@ test("emits encode/decode calls for Str and Bytes parameters and returns", () =>
   assert.match(source, /return decodeBytes\(symbols\["raw"\]!\(\) as XzPointerValue\);/);
 });
 
-test("rejects a mutable parameter until the contract wrapper is emitted", () => {
+test("emits a contracted wrapper that acquires the out value on the ok path", () => {
+  const iface = parseInterface(
+    `${EXPORT}@error InvalidAmount = 1\n@error Overflow = 2\nextern func parse(text: Str, mut out: Float) -> Int contract ok 0\n`,
+  );
+  const source = generateBinding(iface, options);
+  assert.match(source, /import \{[^}]*asStatusCode, runContracted[^}]*\} from "@xz-lang\/bridge"/);
+  assert.match(source, /parse\(text: string\): number;/);
+  assert.match(source, /const out = new Float64Array\(1\);/);
+  assert.match(
+    source,
+    /return runContracted\(\n        \{ library: manifest\.name, symbol: "parse", okCode: 0, errorNames: \{ 1: "InvalidAmount", 2: "Overflow" \} \},\n        \(\) => asStatusCode\(symbols\["parse"\]!\(encodeStr\(text\), out\)\),\n        \(\) => out\[0\]!,\n      \);/,
+  );
+});
+
+test("emits an out-slot per scalar out-parameter type", () => {
+  const iface = parseInterface(
+    `${EXPORT}extern func b(mut out: Bool) -> Int contract ok 0\nextern func c(mut out: Char) -> Int contract ok 0\nextern func i(mut out: Int) -> Int contract ok 0\nextern func u(mut out: usize) -> Int contract ok 0\n`,
+  );
+  const source = generateBinding(iface, options);
+  assert.match(source, /const out = new Uint8Array\(1\);\n      return runContracted\([\s\S]*?\(\) => out\[0\] !== 0,/);
+  assert.match(source, /String\.fromCharCode\(out\[0\]!\)/);
+  assert.match(source, /const out = new BigInt64Array\(1\);/);
+  assert.match(source, /const out = new BigUint64Array\(1\);/);
+});
+
+test("rejects a mutable parameter that is not part of a contract", () => {
   const iface = parseInterface(`${EXPORT}extern func parse(mut out: Float) -> Int\n`);
   assert.throws(
     () => generateBinding(iface, options),
     (error: unknown) =>
-      error instanceof BridgeDefinitionError && error.message.includes("mutable parameter"),
+      error instanceof BridgeDefinitionError &&
+      error.message.includes("only as the out-parameter of a contracted wrapper"),
+  );
+});
+
+test("rejects a contracted out-parameter with no generated out-slot", () => {
+  const iface = parseInterface(
+    `${EXPORT}@cstruct record Point { x: Float y: Float }\nextern func parse(mut out: Point) -> Int contract ok 0\n`,
+  );
+  assert.throws(
+    () => generateBinding(iface, options),
+    (error: unknown) =>
+      error instanceof BridgeDefinitionError && error.message.includes("no generated out-slot"),
   );
 });
 

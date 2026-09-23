@@ -6,7 +6,7 @@ export {
   XzContractError,
   XzintParseError,
 } from "./errors.js";
-export { runContracted } from "./contract.js";
+export { asStatusCode, runContracted } from "./contract.js";
 export type { ContractDescriptor } from "./contract.js";
 export { asXzInt, decodeBytes, decodeStr, encodeBytes, encodeStr } from "./marshalling.js";
 export type { XzPointerValue } from "./marshalling.js";

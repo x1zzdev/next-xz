@@ -2,7 +2,7 @@ import { BridgeDefinitionError } from "./errors.js";
 import { manifestFromInterface, type LibraryManifest } from "./ffi/manifest.js";
 import type { FfiType } from "./ffi/types.js";
 import { cstructNames, mapTypeToTs, renderXzType } from "./type-map.js";
-import type { CStruct, ExternFunc, Interface, Param, XzType } from "./xzint/ast.js";
+import type { CStruct, ExternFunc, Interface, NamedError, Param, XzType } from "./xzint/ast.js";
 
 export interface GenerateOptions {
   readonly name: string;
@@ -89,9 +89,16 @@ function assertGeneratable(
       }
     }
     if (param.mutable) {
-      throw new BridgeDefinitionError(
-        `symbol '${func.name}': mutable parameter '${param.name}' has no generated binding yet; the contract wrapper pattern (docs/01 section 5) is not emitted from .xzint`,
-      );
+      if (func.contract === undefined) {
+        throw new BridgeDefinitionError(
+          `symbol '${func.name}': mutable parameter '${param.name}' is emitted only as the out-parameter of a contracted wrapper; declare the ok status with 'contract ok <code>'`,
+        );
+      }
+      if (outSlot(param.type) === undefined) {
+        throw new BridgeDefinitionError(
+          `symbol '${func.name}': mutable out-parameter '${param.name}' of type '${renderXzType(param.type)}' has no generated out-slot; only Bool, Int, usize, Float, and Char out-parameters are marshalled`,
+        );
+      }
     }
     assertMarshallable(func.name, param.type, cstructs, "param");
   }
@@ -161,9 +168,14 @@ function emitBindingInterface(iface: Interface, names: ReadonlySet<string>): str
   const lines = ["export interface Binding {"];
   for (const func of iface.funcs) {
     const params = func.params
+      .filter((param) => !param.mutable)
       .map((param) => `${param.name}: ${mapTypeToTs(param.type, names, "param")}`)
       .join(", ");
-    lines.push(`  ${func.name}(${params}): ${mapTypeToTs(func.returnType, names, "return")};`);
+    const returnType =
+      func.contract === undefined
+        ? mapTypeToTs(func.returnType, names, "return")
+        : mapTypeToTs(outParam(func).type, names, "return");
+    lines.push(`  ${func.name}(${params}): ${returnType};`);
   }
   lines.push("  close(): void;");
   lines.push("}");
@@ -178,6 +190,7 @@ interface MarshallingNeeds {
   pointerValue: boolean;
   asXzInt: boolean;
   retention: boolean;
+  contracted: boolean;
 }
 
 function collectMarshalling(
@@ -192,8 +205,10 @@ function collectMarshalling(
     pointerValue: false,
     asXzInt: normalized.size > 0,
     retention: false,
+    contracted: false,
   };
   for (const func of iface.funcs) {
+    if (func.contract !== undefined) needs.contracted = true;
     for (const param of func.params) {
       if (isNamed(param.type, "Str")) needs.encodeStr = true;
       if (isNamed(param.type, "Bytes")) needs.encodeBytes = true;
@@ -219,6 +234,36 @@ function isNamed(type: XzType, name: string): boolean {
 
 function isIntType(type: XzType): boolean {
   return isNamed(type, "Int") || isNamed(type, "usize");
+}
+
+interface OutSlot {
+  readonly allocation: string;
+  readonly read: (variable: string) => string;
+}
+
+/**
+ * The typed-array slot a contracted wrapper passes for its `mut` out-parameter
+ * and reads back on the ok path. Both `bun:ffi` (`ptr`) and `koffi` (`void *`)
+ * accept a typed array as the pointer, so the slot is backend-neutral. A type
+ * with no slot (a `@cstruct`, `Str`, `Bytes`, or `Ptr`) is a generator error.
+ */
+function outSlot(type: XzType): OutSlot | undefined {
+  if (isNamed(type, "Bool")) {
+    return { allocation: "new Uint8Array(1)", read: (value) => `${value}[0] !== 0` };
+  }
+  if (isNamed(type, "Char")) {
+    return { allocation: "new Uint8Array(1)", read: (value) => `String.fromCharCode(${value}[0]!)` };
+  }
+  if (isNamed(type, "Float")) {
+    return { allocation: "new Float64Array(1)", read: (value) => `${value}[0]!` };
+  }
+  if (isNamed(type, "Int")) {
+    return { allocation: "new BigInt64Array(1)", read: (value) => `${value}[0]!` };
+  }
+  if (isNamed(type, "usize")) {
+    return { allocation: "new BigUint64Array(1)", read: (value) => `${value}[0]!` };
+  }
+  return undefined;
 }
 
 /**
@@ -308,6 +353,7 @@ function emitImport(needs: MarshallingNeeds, module: string): string {
   if (needs.decodeStr) values.push("decodeStr");
   if (needs.decodeBytes) values.push("decodeBytes");
   if (needs.asXzInt) values.push("asXzInt");
+  if (needs.contracted) values.push("asStatusCode", "runContracted");
   const types = ["type FfiBackend", "type LibraryManifest", "type LoadedLibrary"];
   if (needs.pointerValue) types.push("type XzPointerValue");
   return `import { ${[...values, ...types].join(", ")} } from ${JSON.stringify(module)};`;
@@ -340,11 +386,31 @@ function emitBindFunction(
   }
   lines.push("  return {");
   for (const func of iface.funcs) {
-    const params = func.params.map((param) => param.name).join(", ");
+    const params = func.params
+      .filter((param) => !param.mutable)
+      .map((param) => param.name)
+      .join(", ");
     const preamble: string[] = [];
-    const args = func.params.map((param) => emitArgument(param, preamble, normalized));
+    const args = func.params.map((param) =>
+      param.mutable ? param.name : emitArgument(param, preamble, normalized),
+    );
     const call = `symbols[${JSON.stringify(func.name)}]!(${args.join(", ")})`;
     lines.push(`    ${func.name}(${params}) {`);
+    if (func.contract !== undefined) {
+      const out = outParam(func);
+      const slot = outSlot(out.type)!;
+      lines.push(`      const ${out.name} = ${slot.allocation};`);
+      for (const line of preamble) {
+        lines.push(`      ${line}`);
+      }
+      lines.push("      return runContracted(");
+      lines.push(`        ${emitContractDescriptor(func, iface.errors)},`);
+      lines.push(`        () => asStatusCode(${call}),`);
+      lines.push(`        () => ${slot.read(out.name)},`);
+      lines.push("      );");
+      lines.push("    },");
+      continue;
+    }
     for (const line of preamble) {
       lines.push(`      ${line}`);
     }
@@ -386,6 +452,31 @@ lines.push("    close: () => {");
     lines.push("  };");
     lines.push("}");
     return lines;
+}
+
+function outParam(func: ExternFunc): Param {
+  const out = func.params.find((param) => param.mutable);
+  if (out === undefined) {
+    throw new BridgeDefinitionError(
+      `symbol '${func.name}': a contract descriptor requires one validated mut out-parameter`,
+    );
+  }
+  return out;
+}
+
+function emitContractDescriptor(func: ExternFunc, errors: readonly NamedError[]): string {
+  const parts = [
+    "library: manifest.name",
+    `symbol: ${JSON.stringify(func.name)}`,
+    `okCode: ${func.contract!.okCode}`,
+  ];
+  if (errors.length > 0) {
+    const entries = errors
+      .map((error) => `${error.code}: ${JSON.stringify(error.name)}`)
+      .join(", ");
+    parts.push(`errorNames: { ${entries} }`);
+  }
+  return `{ ${parts.join(", ")} }`;
 }
 
 function emitArgument(

@@ -8,6 +8,7 @@ import { test } from "node:test";
 
 import {
   KoffiBackend,
+  XzContractError,
   generateBinding,
   manifestFromInterface,
   parseInterface,
@@ -69,6 +70,26 @@ const INT_INTERFACE =
   "extern func add_i64(a: Int, b: Int) -> Int\n" +
   "extern func echo_u64(v: usize) -> usize\n" +
   "extern func small_i64() -> Int\n";
+
+const CONTRACT_INTERFACE =
+  "@interface foreign\n" +
+  "@error InvalidAmount = 1\n" +
+  "extern func parse_amount(text: Str, mut out: Float) -> Int contract ok 0\n";
+
+const CONTRACT_FIXTURE_C = `
+#include <stdint.h>
+#include <stddef.h>
+
+typedef struct { const char* ptr; size_t len; } XzStr;
+
+int64_t parse_amount(XzStr s, double* out) {
+    if (s.len == 0) {
+        return 1;
+    }
+    *out = (double)s.len * 1.5;
+    return 0;
+}
+`;
 
 test("koffi smoke: a transfer return decodes and releases through a real .so", async (t) => {
   let koffi: KoffiModule;
@@ -201,6 +222,65 @@ test("koffi smoke: 64-bit ints cross as exact bigint, never a rounded number", a
       () => binding.add_i64(9_007_199_254_740_992 as unknown as bigint, 0n),
       /expected a 64-bit integer/,
       "an unsafe number parameter is a hard error, not a lossy cast",
+    );
+    binding.close();
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+test("koffi smoke: a contracted wrapper reads the out value and raises the status error", async (t) => {
+  let koffi: KoffiModule;
+  try {
+    const imported = (await import("koffi")) as unknown as KoffiModule & {
+      readonly default?: KoffiModule;
+    };
+    koffi = imported.default ?? imported;
+  } catch {
+    t.skip("koffi is not installed");
+    return;
+  }
+  try {
+    execFileSync("cc", ["--version"], { stdio: "ignore" });
+  } catch {
+    t.skip("no C compiler available");
+    return;
+  }
+
+  const dir = await mkdtemp(join(tmpdir(), "next-xz-koffi-contract-"));
+  try {
+    const cFile = join(dir, "fixture.c");
+    const soFile = join(dir, "libfixture.so");
+    await writeFile(cFile, CONTRACT_FIXTURE_C, "utf8");
+    execFileSync("cc", ["-shared", "-fPIC", "-o", soFile, cFile], { stdio: "pipe" });
+
+    const iface = parseInterface(CONTRACT_INTERFACE);
+    const source = generateBinding(iface, {
+      name: "libfixture",
+      libraryPath: soFile,
+      xzVersion: "test",
+      importFrom: BRIDGE_ENTRY,
+    });
+    const moduleFile = join(dir, "libfixture.ts");
+    await writeFile(moduleFile, source, "utf8");
+
+    const module = (await import(pathToFileURL(moduleFile).href)) as {
+      bind(backend: KoffiBackend): {
+        parse_amount(text: string): number;
+        close(): void;
+      };
+    };
+
+    const binding = module.bind(new KoffiBackend(koffi));
+
+    assert.equal(binding.parse_amount("abcd"), 6, "the ok path returns the out value");
+    assert.throws(
+      () => binding.parse_amount(""),
+      (error: unknown) =>
+        error instanceof Error &&
+        error.name === "XzContractError" &&
+        (error as XzContractError).code === 1 &&
+        (error as XzContractError).errorName === "InvalidAmount",
+      "a non-ok status raises the declared error",
     );
     binding.close();
   } finally {
