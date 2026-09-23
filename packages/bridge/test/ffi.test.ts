@@ -13,6 +13,7 @@ import {
 const named = (name: string): XzType => ({ kind: "named", name });
 const noStructs: ReadonlyMap<string, CStruct> = new Map();
 const EXPORT = "@interface export\n";
+const FOREIGN = "@interface foreign\n";
 
 test("maps C-representable scalars to backend-neutral FFI types", () => {
   assert.equal(mapXzTypeToFfi(named("Bool"), noStructs), "bool");
@@ -136,6 +137,19 @@ test("builds a manifest: mut params become pointers, returns keep their type", (
     ],
     returns: "int64",
   });
+});
+
+test("records a transfer return's release symbol in the manifest", () => {
+  const iface = parseInterface(
+    `${FOREIGN}extern func free(ptr: Ptr) -> Unit\nextern func strdup(s: Str) -> transfer Str release free\n`,
+  );
+  const manifest = manifestFromInterface(iface, {
+    name: "libdup",
+    path: ".next-xz/libdup.so",
+    xzVersion: "0.1.0",
+  });
+  assert.equal(manifest.symbols["strdup"]?.release, "free");
+  assert.equal(manifest.symbols["free"]?.release, undefined);
 });
 
 test("maps only a validated type: an unvalidated call throws the internal invariant", () => {

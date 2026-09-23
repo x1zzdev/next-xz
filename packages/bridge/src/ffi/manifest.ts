@@ -6,6 +6,14 @@ import { mapXzTypeToFfi, type FfiType } from "./types.js";
 export interface SymbolDefinition {
   readonly args: readonly FfiType[];
   readonly returns: FfiType;
+  /**
+   * The deallocator for a `transfer` return. The returned buffer moves to the
+   * caller, so it must be freed through this symbol (a borrowed-`Ptr`-taking
+   * `Unit` function declared in the same interface). Present exactly when the
+   * symbol's return is `transfer`, so a manifest-only consumer sees the
+   * ownership and release channel without re-reading the interface.
+   */
+  readonly release?: string;
 }
 
 export interface LibraryManifest {
@@ -31,12 +39,14 @@ export function manifestFromInterface(iface: Interface, input: ManifestInput): L
   );
   const symbols: Record<string, SymbolDefinition> = {};
   for (const func of iface.funcs) {
-    symbols[func.name] = {
+    const definition: SymbolDefinition = {
       args: func.params.map((param) =>
         param.mutable ? "ptr" : mapXzTypeToFfi(param.type, cstructs, "param"),
       ),
       returns: mapXzTypeToFfi(func.returnType, cstructs, "return"),
     };
+    symbols[func.name] =
+      func.release === undefined ? definition : { ...definition, release: func.release };
   }
   return { name: input.name, path: input.path, xzVersion: input.xzVersion, symbols };
 }

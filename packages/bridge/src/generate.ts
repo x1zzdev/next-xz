@@ -132,8 +132,10 @@ function emitManifest(manifest: LibraryManifest): string[] {
   lines.push("  symbols: {");
   for (const [name, definition] of Object.entries(manifest.symbols)) {
     const args = definition.args.map(emitFfiType).join(", ");
+    const release =
+      definition.release === undefined ? "" : `, release: ${JSON.stringify(definition.release)}`;
     lines.push(
-      `    ${JSON.stringify(name)}: { args: [${args}], returns: ${emitFfiType(definition.returns)} },`,
+      `    ${JSON.stringify(name)}: { args: [${args}], returns: ${emitFfiType(definition.returns)}${release} },`,
     );
   }
   lines.push("  },");

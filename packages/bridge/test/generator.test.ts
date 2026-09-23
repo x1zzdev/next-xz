@@ -131,6 +131,15 @@ test("emits a release call around a transfer return", () => {
   assert.match(source, /finally \{\n        symbols\["free"\]!\(result\.address \?\? result\.ptr\);/);
 });
 
+test("emits a transfer return's release symbol into the manifest", () => {
+  const iface = parseInterface(
+    `${FOREIGN}extern func free(ptr: Ptr) -> Unit\nextern func strdup(s: Str) -> transfer Str release free\n`,
+  );
+  const source = generateBinding(iface, options);
+  assert.match(source, /"strdup": \{.*release: "free" \}/);
+  assert.match(source, /"free": \{ args: \["ptr"\], returns: "void" \}/);
+});
+
 test("rejects a Str field inside a @cstruct record", () => {
   const iface = parseInterface(
     `${EXPORT}@cstruct record Name {\n    text: Str\n}\nextern func id(n: Name) -> Name\n`,

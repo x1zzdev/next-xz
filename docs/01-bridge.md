@@ -125,7 +125,9 @@ The loader consumes a `LibraryManifest`: the shared-object path, the Xz compiler
 version the object was built with, and one C signature per symbol. The manifest
 is what the generator records alongside the `.so`; the loader never guesses a
 layout from source. A `mut` parameter is recorded as a pointer (`T*`), matching
-the C in/out convention.
+the C in/out convention. A symbol with a `transfer` return also records its
+`release` symbol name, so a consumer that reads only the manifest still sees
+who owns the returned buffer and how it is freed (§4.2).
 
 The signature is expressed in backend-neutral FFI types (`bool`, `int64`,
 `uint64`, `double`, `char`, `ptr`, `void`, and named structs), so the Bun and
@@ -222,7 +224,9 @@ a JavaScript value, then calls the release symbol with the returned `ptr` in a
 `finally` path, so a decode failure cannot leak it. When the backend had to
 decode `ptr` into a byte view, `result.address` carries the backend's original
 pointer and the release symbol receives that instead; passing the decoded copy
-would free the wrong allocation. A `transfer` return without
+would free the wrong allocation. The manifest records the `release` symbol name
+on the symbol definition (§3.1), so the ownership channel is visible without
+re-parsing the interface. A `transfer` return without
 a `release` clause is a hard error, and a `release` clause on a return that is
 not `transfer` is a definition error: a buffer is never silently leaked or
 freed twice. Only a top-level `Str`/`Bytes` return has a release path; a
