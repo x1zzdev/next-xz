@@ -133,9 +133,13 @@ The signature is expressed in backend-neutral FFI types (`bool`, `int64`,
 `uint64`, `double`, `char`, `ptr`, `void`, and named structs), so the Bun and
 Node loaders share one description. `Str`/`Bytes` are the `XzStr`/`XzBytes`
 pointer/length structs. A struct carries its field names so a backend can
-register its layout. An `int64`/`uint64` symbol crosses as `bigint` (§4.1);
-whether a backend accepts and returns `bigint` for a 64-bit type, rather than a
-lossy `number`, is unverified without a real `.so` (§8).
+register its layout. An `int64`/`uint64` symbol crosses as `bigint` (§4.1). On
+Node, `koffi` accepts a `BigInt` argument and returns a `bigint` for any value
+above 2^53 while reporting small values as `number`; `asXzInt` widens that
+safe-integer `number`, so the binding always hands back an exact `bigint`. A
+real `.so` smoke test pins this contract, including the full `uint64` range and
+a hard error on an unsafe `number`. The Bun path is not exercised: `bun:ffi`'s
+64-bit contract stays unverified until a Bun runtime is available (§8).
 
 `bun:ffi` registers only scalar and pointer FFIType values; it cannot declare a
 struct passed by value. A symbol whose signature contains `Str`, `Bytes`, or a
@@ -449,6 +453,12 @@ functions.
 
 - Where the TypeScript generator lives is settled (§2.2): in
   `@xz-lang/bridge`, not the Xz CLI.
+- The 64-bit integer contract is settled for Node and open for Bun (§3.1):
+  `koffi` exchanges `int64_t`/`uint64_t` as exact `bigint`, a real `.so` smoke
+  test pins the round-trip including the full `uint64` range, and `asXzInt`
+  normalizes the small-value `number` `koffi` returns. `bun:ffi`'s 64-bit value
+  representation is not exercised without a Bun runtime, so the Bun leg stays
+  unverified.
 - Zero-copy ownership rules for retained pointers are expressed by the
   `transfer` parameter modifier on `extern func` ([Xz
   docs/10](https://github.com/x1zzdev/Xz/blob/main/docs/10-ffi-interop.md)).
