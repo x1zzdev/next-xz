@@ -1,4 +1,5 @@
 import { BridgeDefinitionError } from "../errors.js";
+import { formatInterfaceProblem, validateInterface } from "../validate.js";
 import type { CStruct, Interface } from "../xzint/ast.js";
 import { mapXzTypeToFfi, type FfiType } from "./types.js";
 
@@ -21,16 +22,15 @@ export interface ManifestInput {
 }
 
 export function manifestFromInterface(iface: Interface, input: ManifestInput): LibraryManifest {
+  const problems = validateInterface(iface);
+  if (problems.length > 0) {
+    throw new BridgeDefinitionError(formatInterfaceProblem(problems[0]!));
+  }
   const cstructs: ReadonlyMap<string, CStruct> = new Map(
     iface.cstructs.map((cstruct) => [cstruct.name, cstruct]),
   );
   const symbols: Record<string, SymbolDefinition> = {};
   for (const func of iface.funcs) {
-    if (Object.prototype.hasOwnProperty.call(symbols, func.name)) {
-      throw new BridgeDefinitionError(
-        `duplicate symbol '${func.name}' in interface '${input.name}'`,
-      );
-    }
     symbols[func.name] = {
       args: func.params.map((param) =>
         param.mutable ? "ptr" : mapXzTypeToFfi(param.type, cstructs, "param"),

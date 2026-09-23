@@ -63,7 +63,24 @@ export function validateInterface(iface: Interface): readonly InterfaceProblem[]
     }
   }
 
+  const funcNames = new Set<string>();
+  const seenFuncDuplicates = new Set<string>();
   for (const func of iface.funcs) {
+    if (funcNames.has(func.name)) {
+      if (!seenFuncDuplicates.has(func.name)) {
+        seenFuncDuplicates.add(func.name);
+        problems.push({
+          kind: "duplicate",
+          symbol: func.name,
+          position: "declaration",
+          path: [],
+          type: func.name,
+          reason: "extern function is declared more than once",
+        });
+      }
+      continue;
+    }
+    funcNames.add(func.name);
     for (const param of func.params) {
       checkType(records, param.type, func.name, "param", [param.name], problems);
     }

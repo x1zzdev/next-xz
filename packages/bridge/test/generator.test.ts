@@ -107,6 +107,16 @@ test("rejects a duplicate @cstruct declaration before it can be overwritten", ()
   );
 });
 
+test("rejects an extern function declared more than once", () => {
+  const iface = parseInterface("extern func f() -> Int\nextern func f() -> Int\n");
+  assert.throws(
+    () => generateBinding(iface, options),
+    (error: unknown) =>
+      error instanceof BridgeDefinitionError &&
+      error.message.includes("extern function is declared more than once"),
+  );
+});
+
 test("rejects a @cstruct name that shadows a built-in primitive", () => {
   const iface = parseInterface("@cstruct record Int { value: Float }\nextern func f(x: Int) -> Int\n");
   assert.throws(

@@ -123,6 +123,8 @@ test("rejects a duplicate symbol in the interface", () => {
   assert.throws(
     () =>
       manifestFromInterface(iface, { name: "lib", path: "lib.so", xzVersion: "0.1.0" }),
-    BridgeDefinitionError,
+    (error: unknown) =>
+      error instanceof BridgeDefinitionError &&
+      error.message.includes("extern function is declared more than once"),
   );
 });

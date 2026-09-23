@@ -113,6 +113,21 @@ test("reports a reserved @cstruct name only once", () => {
   assert.equal(reserved.length, 1);
 });
 
+test("flags an extern function declared more than once", () => {
+  const iface = parseInterface("extern func f() -> Int\nextern func f() -> Int\n");
+  const problems = validateInterface(iface);
+  assert.equal(problems.length, 1);
+  assert.equal(problems[0]?.kind, "duplicate");
+  assert.equal(problems[0]?.symbol, "f");
+  assert.match(formatInterfaceProblem(problems[0]!), /extern function is declared more than once/);
+});
+
+test("reports a duplicate extern function name only once", () => {
+  const iface = parseInterface("extern func f() -> Int\nextern func f() -> Int\nextern func f() -> Int\n");
+  const duplicates = validateInterface(iface).filter((problem) => problem.kind === "duplicate");
+  assert.equal(duplicates.length, 1);
+});
+
 test("formats a problem with symbol, location, and reason", () => {
   const iface = parseInterface("extern func parse(value: Missing) -> Int\n");
   const problem = validateInterface(iface)[0]!;

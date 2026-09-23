@@ -241,14 +241,18 @@ pass: `validateInterface` reports every declaration that is not C-representable
 — a generic `Result`/`Option`/collection, `Unit` outside a return, an undeclared
 record, or a cyclic `@cstruct` — instead of failing type by type. It also
 rejects a `@cstruct` name declared more than once, rather than letting the later
-declaration silently replace the earlier one. It also rejects a `@cstruct` name
+declaration silently replace the earlier one, and an `extern func` name declared
+more than once for the same reason. It also rejects a `@cstruct` name
 that collides with a built-in type name (`Bool`, `Int`, `usize`, `Float`,
 `Char`, `Str`, `Bytes`, `Ptr`, `Unit`): a reference to that name would silently
 resolve to the primitive and ignore the record, so the collision is a definition
 error. This is the same
 C-representability rule the compiler applies to `@export`. A `Str`/`Bytes`
 `@cstruct` field is C-representable and passes this check; the generator rejects
-it separately because the binding does not marshal it.
+it separately because the binding does not marshal it. `manifestFromInterface`
+runs the same pass and refuses to build a symbol table from an interface with any
+problem, so a duplicate function name can never silently overwrite the earlier
+symbol.
 
 ## 7. Performance budget
 
