@@ -252,7 +252,10 @@ C-representability rule the compiler applies to `@export`. A `Str`/`Bytes`
 it separately because the binding does not marshal it. `manifestFromInterface`
 runs the same pass and refuses to build a symbol table from an interface with any
 problem, so a duplicate function name can never silently overwrite the earlier
-symbol.
+symbol. `validateInterface` is the single owner of the C-representability and
+cycle rules: `mapXzTypeToFfi` performs structural mapping only and assumes the
+interface already passed that pass, so the manifest path and the generator cannot
+disagree about what is representable.
 
 ## 7. Performance budget
 
