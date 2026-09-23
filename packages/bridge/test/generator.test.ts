@@ -38,6 +38,20 @@ test("emits a manifest with backend-neutral FFI types", () => {
   assert.match(source, /"run": \{ args: \[\], returns: "void" \}/);
 });
 
+test("emits a loadPlatform entry that selects the backend from the runtime", () => {
+  const iface = parseInterface("extern func add(a: Int, b: Int) -> Int\n");
+  const source = generateBinding(iface, options);
+  assert.match(source, /import \{[^}]*loadPlatformLibrary[^}]*\} from "@xz-lang\/bridge"/);
+  assert.match(source, /import \{[^}]*type LoadedLibrary[^}]*\} from "@xz-lang\/bridge"/);
+  assert.match(source, /export async function loadPlatform\(\): Promise<Binding> \{/);
+  assert.match(
+    source,
+    /await loadPlatformLibrary\(manifest, \{ expectedXzVersion: manifest\.xzVersion \}\)/,
+  );
+  assert.match(source, /function createBinding\(loaded: LoadedLibrary\): Binding \{/);
+  assert.match(source, /return createBinding\(/);
+});
+
 test("emits encode/decode calls for Str and Bytes parameters and returns", () => {
   const iface = parseInterface(
     "extern func parse(text: Str) -> Int\nextern func name(id: Int) -> Str\nextern func raw() -> Bytes\n",

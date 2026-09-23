@@ -189,12 +189,12 @@ function isNamed(type: XzType, name: string): boolean {
 }
 
 function emitImport(needs: MarshallingNeeds, module: string): string {
-  const values = ["loadLibrary"];
+  const values = ["loadLibrary", "loadPlatformLibrary"];
   if (needs.encodeStr) values.push("encodeStr");
   if (needs.encodeBytes) values.push("encodeBytes");
   if (needs.decodeStr) values.push("decodeStr");
   if (needs.decodeBytes) values.push("decodeBytes");
-  const types = ["type FfiBackend", "type LibraryManifest"];
+  const types = ["type FfiBackend", "type LibraryManifest", "type LoadedLibrary"];
   if (needs.pointerValue) types.push("type XzPointerValue");
   return `import { ${[...values, ...types].join(", ")} } from ${JSON.stringify(module)};`;
 }
@@ -205,9 +205,18 @@ function emitBindFunction(
   needs: MarshallingNeeds,
 ): string[] {
   const lines = ["export function bind(backend: FfiBackend): Binding {"];
-  lines.push(
-    "  const loaded = loadLibrary(manifest, { expectedXzVersion: manifest.xzVersion, backend });",
-  );
+  lines.push("  return createBinding(");
+  lines.push("    loadLibrary(manifest, { expectedXzVersion: manifest.xzVersion, backend }),");
+  lines.push("  );");
+  lines.push("}");
+  lines.push("");
+  lines.push("export async function loadPlatform(): Promise<Binding> {");
+  lines.push("  return createBinding(");
+  lines.push("    await loadPlatformLibrary(manifest, { expectedXzVersion: manifest.xzVersion }),");
+  lines.push("  );");
+  lines.push("}");
+  lines.push("");
+  lines.push("function createBinding(loaded: LoadedLibrary): Binding {");
   lines.push(
     "  const symbols = loaded.symbols as Readonly<Record<string, (...args: unknown[]) => unknown>>;",
   );

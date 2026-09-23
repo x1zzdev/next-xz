@@ -200,12 +200,20 @@ after an error.
 The generator emits one module per interface, named after its stem. It declares
 each `@cstruct` as a TypeScript interface, records the manifest, and exposes a
 `bind(backend)` factory that loads the shared object through the given `FfiBackend`
-and returns the typed facade. Binding is explicit so the runtime can inject the
-Bun or Node backend, and the backend is the only thing that varies per platform.
+and returns the typed facade, plus a `loadPlatform()` entry that calls
+`loadPlatformLibrary` to pick the backend from the runtime (§3). Binding is
+explicit so the runtime can inject the Bun or Node backend; `loadPlatform()`
+takes no backend, and the backend is the only thing that varies per platform.
 
 ```ts
 // src/xz/order.ts (generated — do not edit)
-import { loadLibrary, type FfiBackend, type LibraryManifest } from "@xz-lang/bridge";
+import {
+  loadLibrary,
+  loadPlatformLibrary,
+  type FfiBackend,
+  type LibraryManifest,
+  type LoadedLibrary,
+} from "@xz-lang/bridge";
 
 export interface Color { r: number; g: number; b: number; a: number }
 
@@ -224,7 +232,18 @@ export interface Binding {
 }
 
 export function bind(backend: FfiBackend): Binding {
-  const loaded = loadLibrary(manifest, { expectedXzVersion: manifest.xzVersion, backend });
+  return createBinding(
+    loadLibrary(manifest, { expectedXzVersion: manifest.xzVersion, backend }),
+  );
+}
+
+export async function loadPlatform(): Promise<Binding> {
+  return createBinding(
+    await loadPlatformLibrary(manifest, { expectedXzVersion: manifest.xzVersion }),
+  );
+}
+
+function createBinding(loaded: LoadedLibrary): Binding {
   const symbols = loaded.symbols as Readonly<Record<string, (...args: unknown[]) => unknown>>;
   return {
     payableTotal(subtotal, taxRate) {
