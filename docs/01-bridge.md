@@ -16,7 +16,11 @@ From the Xz FFI spec:
   rejected.
 - `Str`/`Bytes` cross as two-field structs (pointer + length). `mut`
   parameters map to `T*` (C in/out).
-- The generated header is an honest, complete description of the ABI.
+- The generated header is an honest, complete description of the ABI. It states
+  the ownership convention too: a parameter is borrowed for the call, and a
+  returned pointer is retained by the library. An `@export` function cannot use
+  `transfer` (a foreign `extern func` modifier only), so ownership never varies
+  across exports and no per-symbol annotation is needed.
 
 The bridge consumes exactly this surface. It never reads Xz source to guess a
 layout; it reads the generated header or the `.xzint` interface.
