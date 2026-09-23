@@ -3,7 +3,13 @@ import type { CStruct, Interface, XzType } from "./xzint/ast.js";
 
 export type ValidationPosition = "param" | "return" | "field" | "declaration";
 
-export type InterfaceProblemKind = "generic" | "unit" | "unknown" | "cycle" | "duplicate";
+export type InterfaceProblemKind =
+  | "generic"
+  | "unit"
+  | "unknown"
+  | "cycle"
+  | "duplicate"
+  | "reserved";
 
 export interface InterfaceProblem {
   readonly kind: InterfaceProblemKind;
@@ -18,7 +24,22 @@ export function validateInterface(iface: Interface): readonly InterfaceProblem[]
   const problems: InterfaceProblem[] = [];
   const records = new Map<string, CStruct>();
   const seen = new Set<string>();
+  const seenReserved = new Set<string>();
   for (const cstruct of iface.cstructs) {
+    if (isPrimitive(cstruct.name)) {
+      if (!seenReserved.has(cstruct.name)) {
+        seenReserved.add(cstruct.name);
+        problems.push({
+          kind: "reserved",
+          symbol: cstruct.name,
+          position: "declaration",
+          path: [],
+          type: cstruct.name,
+          reason: `@cstruct name collides with the built-in type '${cstruct.name}'`,
+        });
+      }
+      continue;
+    }
     if (records.has(cstruct.name)) {
       if (!seen.has(cstruct.name)) {
         seen.add(cstruct.name);
@@ -68,7 +89,7 @@ export function formatInterfaceProblem(problem: InterfaceProblem): string {
   if (problem.kind === "cycle") {
     return `${head}: ${problem.reason} (${problem.type})`;
   }
-  if (problem.kind === "duplicate") {
+  if (problem.kind === "duplicate" || problem.kind === "reserved") {
     return `${head}: ${problem.reason}`;
   }
   const location =

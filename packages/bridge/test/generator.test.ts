@@ -107,6 +107,16 @@ test("rejects a duplicate @cstruct declaration before it can be overwritten", ()
   );
 });
 
+test("rejects a @cstruct name that shadows a built-in primitive", () => {
+  const iface = parseInterface("@cstruct record Int { value: Float }\nextern func f(x: Int) -> Int\n");
+  assert.throws(
+    () => generateBinding(iface, options),
+    (error: unknown) =>
+      error instanceof BridgeDefinitionError &&
+      error.message.includes("collides with the built-in type 'Int'"),
+  );
+});
+
 test("rejects a cyclic @cstruct interface instead of recursing forever", () => {
   const iface = parseInterface("@cstruct record A {\n    b: B\n}\n@cstruct record B {\n    a: A\n}\n");
   assert.throws(

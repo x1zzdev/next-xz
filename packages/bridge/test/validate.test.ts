@@ -96,6 +96,23 @@ test("reports a duplicate @cstruct name only once", () => {
   assert.equal(duplicates.length, 1);
 });
 
+test("flags a @cstruct name that collides with a built-in primitive", () => {
+  const iface = parseInterface("@cstruct record Int { value: Float }\n");
+  const problems = validateInterface(iface);
+  assert.equal(problems.length, 1);
+  assert.equal(problems[0]?.kind, "reserved");
+  assert.equal(problems[0]?.symbol, "Int");
+  assert.match(formatInterfaceProblem(problems[0]!), /collides with the built-in type 'Int'/);
+});
+
+test("reports a reserved @cstruct name only once", () => {
+  const iface = parseInterface(
+    "@cstruct record Str { a: Int }\n@cstruct record Str { a: Int }\n",
+  );
+  const reserved = validateInterface(iface).filter((problem) => problem.kind === "reserved");
+  assert.equal(reserved.length, 1);
+});
+
 test("formats a problem with symbol, location, and reason", () => {
   const iface = parseInterface("extern func parse(value: Missing) -> Int\n");
   const problem = validateInterface(iface)[0]!;
