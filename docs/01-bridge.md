@@ -146,19 +146,32 @@ the callee may not retain the pointer past the call. `transfer` is a C ABI
 ownership declaration ([Xz
 docs/10](https://github.com/x1zzdev/Xz/blob/main/docs/10-ffi-interop.md)): it is
 legal only on a foreign `extern func` parameter, where the C callee takes
-ownership. A `.xzint` declares the boundary of an Xz library's `@export`
-functions, and Xz forbids `transfer` on those — the C caller cannot hand
-ownership to Xz — so the generator rejects a `transfer` parameter rather than
-emit a handoff the Xz side cannot honor. A borrowed buffer is never handed to a
-callee that may retain it.
+ownership. A `.xzint` that describes an Xz library's `@export` functions cannot
+carry `transfer` in either direction — Xz forbids it on `@export` — so the
+generator rejects a `transfer` parameter rather than emit a handoff the Xz side
+cannot honor. (An interface that describes a foreign C library may legally
+declare it; distinguishing the two interface uses is an open dependency, §8.) A
+borrowed buffer is never handed to a callee that may retain it.
 
 A return is owned by the callee by default: the caller borrows it and must not
 free it. A `transfer` return (`-> transfer T`, [Xz
 docs/10](https://github.com/x1zzdev/Xz/blob/main/docs/10-ffi-interop.md)) moves
-ownership to the caller, but the generated binding cannot take it: it copies
-the returned buffer into a JavaScript value and has no library deallocator to
-release the original, so it rejects a `transfer` return rather than leak the
-buffer.
+ownership to the caller, so the caller must release the buffer through the
+library's deallocator. The interface names that deallocator on the symbol:
+
+```
+extern func free(ptr: Ptr) -> Unit
+extern func strdup(s: Str) -> transfer Str release free
+```
+
+The release symbol is declared in the same interface as a function taking one
+borrowed `Ptr` and returning `Unit`. The binding copies the returned buffer into
+a JavaScript value, then calls the release symbol with the returned `ptr` in a
+`finally` path, so a decode failure cannot leak it. A `transfer` return without
+a `release` clause is a hard error, and a `release` clause on a return that is
+not `transfer` is a definition error: a buffer is never silently leaked or
+freed twice. Only a top-level `Str`/`Bytes` return has a release path; a
+pointer-carrying `@cstruct` handle return is still rejected (§4.4).
 
 `Str`/`Bytes` are marshalled at top level only. A `@cstruct` field of either
 type and by-value payloads remain hard errors until the generator emits their
@@ -172,9 +185,11 @@ semantics. Nested `@cstruct` records nest as objects.
 ### 4.4 Handles
 
 A `@cstruct` containing a `Ptr` is a handle type: never copied, handed off only
-with `transfer` (not yet emitted; the generator rejects `transfer`, §4.2). The
-TypeScript binding exposes it as an opaque object whose methods route back into
-the library; it is not a plain value object.
+with `transfer`. The generator rejects a `transfer` handle in both directions —
+the release contract (§4.2) covers only a top-level `Str`/`Bytes` return — so a
+handle is not yet emitted. The TypeScript binding would expose it as an opaque
+object whose methods route back into the library; it is not a plain value
+object.
 
 ## 5. The `Result` problem
 
@@ -277,9 +292,9 @@ faithfully: scalars (`Bool`, `Int`, `usize`, `Float`, `Char`), `Ptr`,
 borrowed for the call, §4.2). Each `Int`/`usize` argument and return is passed
 through `asXzInt` (§4.1), so the boundary always hands back a `bigint` rather
 than a possibly-rounded `number`. `mut` out-parameters (the `Result` contract
-wrapper, §5), a `transfer` parameter or return, `Str`/`Bytes` as `@cstruct`
-fields, and by-value payloads are hard errors, not lossy output, until the
-generator emits their marshalling.
+wrapper, §5), a `transfer` parameter, a `transfer` return without a declared
+`release` symbol, `Str`/`Bytes` as `@cstruct` fields, and by-value payloads are
+hard errors, not lossy output, until the generator emits their marshalling.
 
 Before it emits anything, the generator validates the whole interface in one
 pass: `validateInterface` reports every declaration that is not C-representable
@@ -297,7 +312,13 @@ ownership declaration that Xz permits only on a foreign `extern func`, but a
 ownership from the C caller. It still rejects a `transfer` return whose type is
 not pointer-carrying (`Str`, `Bytes`, `Ptr`, or a `@cstruct` record with a `Ptr`
 field), the compiler's ownership rule; a scalar has no ownership to transfer.
-`mut` and `transfer` are already mutually exclusive in the grammar. This is the
+It will also check the `release` clause of §4.2 once the `release` grammar
+lands: the named symbol must be an `extern func` declared in the same interface
+with exactly one borrowed `Ptr` parameter and a `Unit` return, and a clause on a
+non-`transfer` return is a definition error. Until that grammar lands the
+generator rejects every `transfer` return (no symbol to release through), rather
+than leak the buffer. `mut` and `transfer` are already mutually exclusive in the
+grammar. This is the
 same C-representability rule the compiler applies to `@export`. A `Str`/`Bytes`
 `@cstruct` field is C-representable and passes this check; the generator rejects
 it separately because the binding does not marshal it. `manifestFromInterface`
@@ -340,8 +361,20 @@ functions.
   Whether an FFI backend exposes a returned struct field as a byte view (rather
   than an opaque pointer) is unverified without a real `.so`; `koffi`/Bun smoke
   tests are outstanding.
-- A `transfer` return (`-> transfer T`) moves ownership to the caller, but the
-  binding has no library deallocator to release a returned buffer, so it rejects
-  the modifier (as the Python wrapper does). Honoring it needs a declared
-  release symbol in the interface; that contract is not specified yet.
+- A `transfer` return (`-> transfer T`) moves ownership to the caller. The
+  deallocator contract is settled (§4.2): the symbol carries a `release <symbol>`
+  clause, the named `extern func` takes one borrowed `Ptr` and returns `Unit`,
+  and the binding copies the returned buffer then frees it through that symbol.
+  The clause is not in the `.xzint` grammar yet, and the grammar is owned by Xz
+  (§2.1), so Xz docs/11, the CLI's `validate_interface`, and `xz pkg gen --lang
+  python` must accept it before the bridge can parse it; the Python wrapper
+  still rejects a `transfer` return ([Xz
+  docs/10](https://github.com/x1zzdev/Xz/blob/main/docs/10-ffi-interop.md)).
+  Until then the bridge keeps rejecting a `transfer` return rather than leak the
+  buffer.
+- A `.xzint` can describe either an Xz `@export` boundary or a foreign C
+  library, and only the latter may carry `transfer`; nothing in the file marks
+  which it is. The release contract (§4.2) assumes the foreign-C
+  interpretation, so an interface-kind marker must be specified before the
+  generator can accept `transfer` at all.
 - Edge runtime requires Wasm, which changes the loading story entirely.
