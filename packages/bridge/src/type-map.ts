@@ -61,20 +61,6 @@ export function cstructNames(iface: Interface): ReadonlySet<string> {
   return new Set(iface.cstructs.map((cstruct) => cstruct.name));
 }
 
-export function isCRepresentable(
-  type: XzType,
-  cstructs: ReadonlySet<string>,
-  position: TypePosition = "param",
-): boolean {
-  if (type.kind === "generic") {
-    return false;
-  }
-  if (PRIMITIVES.has(type.name)) {
-    return type.name === "Unit" ? position === "return" : true;
-  }
-  return cstructs.has(type.name);
-}
-
 /**
  * Maps an already-validated `.xzint` type to its TypeScript type.
  *

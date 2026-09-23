@@ -30,7 +30,6 @@ export {
   PRIMITIVE_MAP,
   NON_C_REPRESENTABLE,
   cstructNames,
-  isCRepresentable,
   isPrimitive,
   mapTypeToTs,
   renderXzType,
