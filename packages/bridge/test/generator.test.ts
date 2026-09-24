@@ -48,13 +48,65 @@ test("emits a loadPlatform entry that selects the backend from the runtime", () 
   assert.match(source, /import \{[^}]*loadPlatformLibrary[^}]*\} from "@xz-lang\/bridge"/);
   assert.match(source, /import \{[^}]*type LoadedLibrary[^}]*\} from "@xz-lang\/bridge"/);
   assert.match(source, /import \{[^}]*type RuntimePlatform[^}]*\} from "@xz-lang\/bridge"/);
-  assert.match(source, /export async function loadPlatform\(platform\?: RuntimePlatform\): Promise<Binding> \{/);
+  assert.match(source, /export async function loadPlatform\(platform\?: RuntimePlatform, expectedXzVersion: string = manifest\.xzVersion\): Promise<Binding> \{/);
   assert.match(
     source,
-    /await loadPlatformLibrary\(manifest, \{ expectedXzVersion: manifest\.xzVersion, platform \}\)/,
+    /await loadPlatformLibrary\(manifest, \{ expectedXzVersion, platform \}\)/,
   );
   assert.match(source, /function createBinding\(loaded: LoadedLibrary\): Binding \{/);
   assert.match(source, /return createBinding\(/);
+});
+
+test("records the caller-supplied xzVersion as build provenance", () => {
+  const iface = parseInterface(`${EXPORT}extern func add(a: Int, b: Int) -> Int\n`);
+  const source = generateBinding(iface, { ...options, xzVersion: "1.2.3" });
+  assert.match(source, /xzVersion: "1\.2\.3",/);
+  assert.doesNotMatch(source, /xzVersion: "0\.1\.0"/);
+});
+
+test("rejects an empty xzVersion instead of fabricating one", () => {
+  const iface = parseInterface(`${EXPORT}extern func add(a: Int, b: Int) -> Int\n`);
+  assert.throws(
+    () => generateBinding(iface, { ...options, xzVersion: "" }),
+    (error: unknown) =>
+      error instanceof BridgeDefinitionError && error.message.includes("xzVersion is required"),
+  );
+  assert.throws(
+    () => generateBinding(iface, { ...options, xzVersion: "   " }),
+    (error: unknown) =>
+      error instanceof BridgeDefinitionError && error.message.includes("xzVersion is required"),
+  );
+});
+
+test("generated bind accepts an independent expectedXzVersion pin", async () => {
+  const iface = parseInterface(`${EXPORT}extern func add(a: Int, b: Int) -> Int\n`);
+  const source = generateBinding(iface, { ...options, importFrom: bridgeEntry });
+
+  const dir = await mkdtemp(join(tmpdir(), "next-xz-gen-"));
+  try {
+    const file = join(dir, "liborder.ts");
+    await writeFile(file, source, "utf8");
+
+    const module = (await import(pathToFileURL(file).href)) as {
+      bind(backend: FfiBackend, expectedXzVersion?: string): { close(): void };
+    };
+    const backend: FfiBackend = {
+      dlopen: () => ({ symbols: { add: () => 0 }, close: () => {} }),
+    };
+
+    const pinned = module.bind(backend, "0.1.0");
+    pinned.close();
+
+    assert.throws(
+      () => module.bind(backend, "0.2.0"),
+      (error: unknown) =>
+        error instanceof Error &&
+        error.name === "BridgeVersionError" &&
+        (error as { expected?: string }).expected === "0.2.0",
+    );
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
 });
 
 test("emits encode/decode calls for Str and Bytes parameters and returns", () => {

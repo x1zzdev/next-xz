@@ -7,6 +7,12 @@ import type { CStruct, ExternFunc, Interface, NamedError, Param, XzType } from "
 export interface GenerateOptions {
   readonly name: string;
   readonly libraryPath: string;
+  /**
+   * Build provenance recorded in the manifest: the Xz compiler version the
+   * shared object was built with. Required and non-empty. Xz exposes no version
+   * surface, so the caller that built the `.so` supplies this explicitly; the
+   * generator records it verbatim and never fabricates one.
+   */
   readonly xzVersion: string;
   readonly importFrom?: string;
 }
@@ -365,17 +371,19 @@ function emitBindFunction(
   needs: MarshallingNeeds,
   normalized: ReadonlySet<string>,
 ): string[] {
-  const lines = ["export function bind(backend: FfiBackend): Binding {"];
+  const lines = [
+    "export function bind(backend: FfiBackend, expectedXzVersion: string = manifest.xzVersion): Binding {",
+  ];
   lines.push("  return createBinding(");
-  lines.push("    loadLibrary(manifest, { expectedXzVersion: manifest.xzVersion, backend }),");
+  lines.push("    loadLibrary(manifest, { expectedXzVersion, backend }),");
   lines.push("  );");
   lines.push("}");
   lines.push("");
-  lines.push("export async function loadPlatform(platform?: RuntimePlatform): Promise<Binding> {");
-  lines.push("  return createBinding(");
   lines.push(
-    "    await loadPlatformLibrary(manifest, { expectedXzVersion: manifest.xzVersion, platform }),",
+    "export async function loadPlatform(platform?: RuntimePlatform, expectedXzVersion: string = manifest.xzVersion): Promise<Binding> {",
   );
+  lines.push("  return createBinding(");
+  lines.push("    await loadPlatformLibrary(manifest, { expectedXzVersion, platform }),");
   lines.push("  );");
   lines.push("}");
   lines.push("");

@@ -34,6 +34,14 @@ export interface SymbolDefinition {
 export interface LibraryManifest {
   readonly name: string;
   readonly path: string;
+  /**
+   * Build provenance: the Xz compiler version the shared object was built with.
+   * Xz exposes no version surface, so the bridge cannot derive it; the value is
+   * supplied explicitly by the pipeline that built the `.so` and recorded
+   * verbatim. It is never defaulted or guessed, and it pins nothing on its own
+   * — a consumer that wants a pin passes its own `expectedXzVersion` to the
+   * loader, which compares it against this recorded value.
+   */
   readonly xzVersion: string;
   readonly symbols: Readonly<Record<string, SymbolDefinition>>;
 }
@@ -41,10 +49,21 @@ export interface LibraryManifest {
 export interface ManifestInput {
   readonly name: string;
   readonly path: string;
+  /**
+   * The Xz compiler version the shared object was built with. Required and
+   * non-empty: because Xz exposes no version surface, the bridge has no honest
+   * value to substitute, so an omitted version is a hard error rather than a
+   * fabricated default.
+   */
   readonly xzVersion: string;
 }
 
 export function manifestFromInterface(iface: Interface, input: ManifestInput): LibraryManifest {
+  if (input.xzVersion.trim() === "") {
+    throw new BridgeDefinitionError(
+      "manifest xzVersion is required: record the Xz compiler version the shared object was built with (Xz exposes no version surface, so the bridge cannot infer one)",
+    );
+  }
   const problems = validateInterface(iface);
   if (problems.length > 0) {
     throw new BridgeDefinitionError(formatInterfaceProblem(problems[0]!));

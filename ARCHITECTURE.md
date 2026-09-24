@@ -176,8 +176,10 @@ always reflects the body, not just the claim.
 ## 6. Determinism
 
 Given the same Xz version and source, `xz build --shared` produces identical
-binary behavior. `next.xz` pins the compiler version in a lockfile and refuses
-to bind a shared library built by a different version.
+binary behavior. The bridge records the compiler version the library was built
+with as provenance, supplied explicitly by the build pipeline because Xz exposes
+no version surface. The caller pins: it passes `expectedXzVersion` to the loader
+and a mismatch throws `BridgeVersionError`.
 
 ## 7. Trust boundaries
 

@@ -90,6 +90,15 @@ test("manifest validation rejects a cyclic @cstruct before mapping", () => {
   );
 });
 
+test("manifest validation rejects an empty xzVersion", () => {
+  const iface = parseInterface(`${EXPORT}extern func add(a: Int, b: Int) -> Int\n`);
+  assert.throws(
+    () => manifestFromInterface(iface, { name: "lib", path: "lib.so", xzVersion: "" }),
+    (error: unknown) =>
+      error instanceof BridgeDefinitionError && error.message.includes("xzVersion is required"),
+  );
+});
+
 test("manifest validation rejects Unit parameters and generics before mapping", () => {
   const unitParam = parseInterface(`${EXPORT}extern func f(u: Unit) -> Int\n`);
   assert.throws(

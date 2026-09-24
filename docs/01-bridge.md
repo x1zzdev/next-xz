@@ -117,7 +117,8 @@ CLI keeps `--lang python` and the interface checks both paths share.
 The loader:
 
 1. resolves the shared object path from the generated metadata,
-2. verifies the Xz compiler version recorded in the metadata,
+2. checks the Xz compiler version recorded in the metadata against the caller's
+   expectation, when one is supplied,
 3. registers each symbol with its C signature,
 4. returns a typed facade.
 
@@ -147,6 +148,19 @@ the C in/out convention. A symbol with a `transfer` return also records its
 who owns the returned buffer and how it is freed (§4.2). A contracted symbol
 (§5.1) records a `contract` descriptor — the ok status code, the `mut`
 out-parameter name, and the `@error` names — for the same reason.
+
+`xzVersion` is build provenance, not generator output. Xz exposes no version
+surface (`--version`, metadata, or a header field), so the bridge cannot derive
+it; the pipeline that built the shared object supplies it explicitly as
+`GenerateOptions.xzVersion` and the generator records it verbatim. An empty
+version is a `BridgeDefinitionError`, never a fabricated default: recording a
+guessed version would be an unverifiable claim a reviewer could not trust. The
+recorded value pins nothing on its own. The loader compares it against
+`LoadOptions.expectedXzVersion`, so a consumer that wants a real pin passes its
+own expected version (e.g. from a lockfile); the generated `bind()`/
+`loadPlatform()` default that argument to the recorded value and accept an
+override. Until Xz exposes its version, the build pipeline cannot source the
+value automatically and must supply it.
 
 The signature is expressed in backend-neutral FFI types (`bool`, `int64`,
 `uint64`, `double`, `char`, `ptr`, `void`, and named structs), so the Bun and
@@ -409,13 +423,17 @@ interface that uses them is portable to the CLI (§8).
 
 The generator emits one module per interface, named after its stem. It declares
 each `@cstruct` as a TypeScript interface, records the manifest, and exposes a
-`bind(backend)` factory that loads the shared object through the given `FfiBackend`
-and returns the typed facade, plus a `loadPlatform(platform?)` entry that calls
+`bind(backend, expectedXzVersion?)` factory that loads the shared object through
+the given `FfiBackend` and returns the typed facade, plus a
+`loadPlatform(platform?, expectedXzVersion?)` entry that calls
 `loadPlatformLibrary` to pick the backend from the runtime (§3). Binding is
 explicit so the runtime can inject the Bun or Node backend; `loadPlatform`
 takes no backend, and the backend is the only thing that varies per platform.
 The optional `platform` argument forwards to `loadPlatformLibrary`'s override
-(§3) so a caller can force a backend the runtime probe would not pick.
+(§3) so a caller can force a backend the runtime probe would not pick. The
+optional `expectedXzVersion` argument is the caller's version pin (§3.1): it
+defaults to the recorded build provenance, and a caller holding an independent
+expectation (a lockfile) passes it to make the pin meaningful.
 
 ```ts
 // src/xz/order.ts (generated — do not edit)
@@ -444,15 +462,18 @@ export interface Binding {
   close(): void;
 }
 
-export function bind(backend: FfiBackend): Binding {
+export function bind(backend: FfiBackend, expectedXzVersion: string = manifest.xzVersion): Binding {
   return createBinding(
-    loadLibrary(manifest, { expectedXzVersion: manifest.xzVersion, backend }),
+    loadLibrary(manifest, { expectedXzVersion, backend }),
   );
 }
 
-export async function loadPlatform(platform?: RuntimePlatform): Promise<Binding> {
+export async function loadPlatform(
+  platform?: RuntimePlatform,
+  expectedXzVersion: string = manifest.xzVersion,
+): Promise<Binding> {
   return createBinding(
-    await loadPlatformLibrary(manifest, { expectedXzVersion: manifest.xzVersion, platform }),
+    await loadPlatformLibrary(manifest, { expectedXzVersion, platform }),
   );
 }
 

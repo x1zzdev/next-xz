@@ -29,15 +29,15 @@ export interface Binding {
   close(): void;
 }
 
-export function bind(backend: FfiBackend): Binding {
+export function bind(backend: FfiBackend, expectedXzVersion: string = manifest.xzVersion): Binding {
   return createBinding(
-    loadLibrary(manifest, { expectedXzVersion: manifest.xzVersion, backend }),
+    loadLibrary(manifest, { expectedXzVersion, backend }),
   );
 }
 
-export async function loadPlatform(platform?: RuntimePlatform): Promise<Binding> {
+export async function loadPlatform(platform?: RuntimePlatform, expectedXzVersion: string = manifest.xzVersion): Promise<Binding> {
   return createBinding(
-    await loadPlatformLibrary(manifest, { expectedXzVersion: manifest.xzVersion, platform }),
+    await loadPlatformLibrary(manifest, { expectedXzVersion, platform }),
   );
 }
 

@@ -14,8 +14,14 @@
 
 - Given the same Xz version and source, `xz build --shared` produces identical
   binary behavior.
-- `next.xz` pins the Xz compiler version in a lockfile and refuses to bind a
-  shared library built by a different version (`BridgeVersionError`).
+- `next.xz` records the Xz compiler version a shared library was built with as
+  build provenance: the pipeline that runs `xz build --shared` supplies it
+  explicitly, because Xz exposes no version surface to read. An empty value is a
+  hard error, never a fabricated default.
+- The pin is the caller's: a consumer passes `expectedXzVersion` to the loader
+  (e.g. from a lockfile) and a mismatch against the recorded value throws
+  `BridgeVersionError`. The generated `bind()`/`loadPlatform()` default to the
+  recorded provenance and accept an override.
 - The agent records the prompt hash and model version for each run so a result
   is reproducible or explainable.
 
