@@ -25,16 +25,21 @@ export function detectPlatform(
   return "node";
 }
 
+export interface PlatformLoadOptions extends Omit<LoadOptions, "backend"> {
+  readonly platform?: RuntimePlatform;
+}
+
 export async function loadPlatformLibrary(
   manifest: LibraryManifest,
-  options: Omit<LoadOptions, "backend">,
+  options: PlatformLoadOptions,
 ): Promise<LoadedLibrary> {
-  const platform = detectPlatform();
+  const platform = options.platform ?? detectPlatform();
   if (platform === "edge") {
     throw new BridgeRuntimeError(
       "the Edge runtime has no native FFI; compile a WebAssembly module and bind it with loadWasmLibrary",
     );
   }
   const backend = platform === "bun" ? await loadBunBackend() : await loadKoffiBackend();
-  return loadLibrary(manifest, { ...options, backend });
+  const { platform: _platform, ...loadOptions } = options;
+  return loadLibrary(manifest, { ...loadOptions, backend });
 }

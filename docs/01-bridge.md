@@ -129,7 +129,12 @@ A version mismatch throws `BridgeVersionError`. A missing symbol throws
 backend when a `Bun` global is present and the koffi backend otherwise, so the
 same generated module loads on either runtime without the caller supplying a
 backend (§6). The backend is the only thing that varies per platform; the
-returned `LoadedLibrary` is identical.
+returned `LoadedLibrary` is identical. Detection is a default, not a
+constraint: `options.platform` names the backend explicitly and overrides the
+`Bun`-global probe, so a caller can force koffi under Bun (for a struct-valued
+export `bun:ffi` cannot declare, §3.1) or force `bun:ffi` under Node. Forcing
+`"edge"` keeps the `loadWasmLibrary` guidance. There is no environment-variable
+override: the explicit option is the single canonical way (AGENT rule 5).
 
 ### 3.1 Library metadata
 

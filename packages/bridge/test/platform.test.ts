@@ -62,6 +62,38 @@ test("loadPlatformLibrary selects the bun:ffi loader when the Bun global is pres
   }
 });
 
+test("loadPlatformLibrary honors an explicit platform override over the Bun probe", async () => {
+  const globals = globalThis as { Bun?: unknown };
+  globals.Bun = {};
+  try {
+    await assert.rejects(
+      loadPlatformLibrary(manifest(), { expectedXzVersion: "0.1.0", platform: "node" }),
+      (error: unknown) =>
+        !(error as { message?: string }).message?.includes("bun:ffi"),
+    );
+  } finally {
+    delete globals.Bun;
+  }
+});
+
+test("loadPlatformLibrary forces the bun:ffi loader when no Bun global is present", async () => {
+  const globals = globalThis as { Bun?: unknown };
+  delete globals.Bun;
+  await assert.rejects(
+    loadPlatformLibrary(manifest(), { expectedXzVersion: "0.1.0", platform: "bun" }),
+    (error: unknown) =>
+      error instanceof BridgeRuntimeError && error.message.includes("bun:ffi"),
+  );
+});
+
+test("loadPlatformLibrary honors an explicit edge override", async () => {
+  await assert.rejects(
+    loadPlatformLibrary(manifest(), { expectedXzVersion: "0.1.0", platform: "edge" }),
+    (error: unknown) =>
+      error instanceof BridgeRuntimeError && error.message.includes("loadWasmLibrary"),
+  );
+});
+
 test("loadPlatformLibrary points the Edge runtime at loadWasmLibrary", async () => {
   const globals = globalThis as Record<string, unknown>;
   const savedProcess = globals["process"];
