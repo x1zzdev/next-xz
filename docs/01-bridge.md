@@ -157,8 +157,10 @@ Node, `koffi` accepts a `BigInt` argument and returns a `bigint` for any value
 above 2^53 while reporting small values as `number`; `asXzInt` widens that
 safe-integer `number`, so the binding always hands back an exact `bigint`. A
 real `.so` smoke test pins this contract, including the full `uint64` range and
-a hard error on an unsafe `number`. The Bun path is not exercised: `bun:ffi`'s
-64-bit contract stays unverified until a Bun runtime is available (§8).
+a hard error on an unsafe `number`. On Bun, `bun:ffi` returns a `bigint` for
+`int64_t`/`uint64_t`; a second smoke test runs the generated `loadPlatform()`
+under the Bun runtime against the same `.so` and pins the exact 64-bit
+round-trip through the ambient Bun dispatch (§8).
 
 `bun:ffi` registers only scalar and pointer FFIType values; its FFIType table
 has no by-value struct type. A symbol whose signature contains `Str`, `Bytes`,
@@ -536,12 +538,13 @@ functions.
 
 - Where the TypeScript generator lives is settled (§2.2): in
   `@xz-lang/bridge`, not the Xz CLI.
-- The 64-bit integer contract is settled for Node and open for Bun (§3.1):
-  `koffi` exchanges `int64_t`/`uint64_t` as exact `bigint`, a real `.so` smoke
-  test pins the round-trip including the full `uint64` range, and `asXzInt`
-  normalizes the small-value `number` `koffi` returns. `bun:ffi`'s 64-bit value
-  representation is not exercised without a Bun runtime, so the Bun leg stays
-  unverified.
+- The 64-bit integer contract is settled for Node and Bun (§3.1): `koffi` and
+  `bun:ffi` both exchange `int64_t`/`uint64_t` as exact `bigint`, real `.so`
+  smoke tests pin the round-trip including the full `uint64` range on each
+  runtime, and `asXzInt` normalizes the small-value `number` a backend may
+  return. The Bun leg is exercised by running the generated `loadPlatform()`
+  under the Bun runtime, so the ambient runtime dispatch is verified, not just
+  the backend unit.
 - Zero-copy ownership rules for retained pointers are expressed by the
   `transfer` parameter modifier on `extern func` ([Xz
   docs/10](https://github.com/x1zzdev/Xz/blob/main/docs/10-ffi-interop.md)).
