@@ -408,10 +408,12 @@ interface that uses them is portable to the CLI (§8).
 The generator emits one module per interface, named after its stem. It declares
 each `@cstruct` as a TypeScript interface, records the manifest, and exposes a
 `bind(backend)` factory that loads the shared object through the given `FfiBackend`
-and returns the typed facade, plus a `loadPlatform()` entry that calls
+and returns the typed facade, plus a `loadPlatform(platform?)` entry that calls
 `loadPlatformLibrary` to pick the backend from the runtime (§3). Binding is
-explicit so the runtime can inject the Bun or Node backend; `loadPlatform()`
+explicit so the runtime can inject the Bun or Node backend; `loadPlatform`
 takes no backend, and the backend is the only thing that varies per platform.
+The optional `platform` argument forwards to `loadPlatformLibrary`'s override
+(§3) so a caller can force a backend the runtime probe would not pick.
 
 ```ts
 // src/xz/order.ts (generated — do not edit)
@@ -421,6 +423,7 @@ import {
   type FfiBackend,
   type LibraryManifest,
   type LoadedLibrary,
+  type RuntimePlatform,
 } from "@xz-lang/bridge";
 
 export interface Color { r: number; g: number; b: number; a: number }
@@ -445,9 +448,9 @@ export function bind(backend: FfiBackend): Binding {
   );
 }
 
-export async function loadPlatform(): Promise<Binding> {
+export async function loadPlatform(platform?: RuntimePlatform): Promise<Binding> {
   return createBinding(
-    await loadPlatformLibrary(manifest, { expectedXzVersion: manifest.xzVersion }),
+    await loadPlatformLibrary(manifest, { expectedXzVersion: manifest.xzVersion, platform }),
   );
 }
 

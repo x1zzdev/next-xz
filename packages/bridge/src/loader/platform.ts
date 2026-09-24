@@ -26,7 +26,7 @@ export function detectPlatform(
 }
 
 export interface PlatformLoadOptions extends Omit<LoadOptions, "backend"> {
-  readonly platform?: RuntimePlatform;
+  readonly platform?: RuntimePlatform | undefined;
 }
 
 export async function loadPlatformLibrary(

@@ -354,7 +354,7 @@ function emitImport(needs: MarshallingNeeds, module: string): string {
   if (needs.decodeBytes) values.push("decodeBytes");
   if (needs.asXzInt) values.push("asXzInt");
   if (needs.contracted) values.push("asStatusCode", "runContracted");
-  const types = ["type FfiBackend", "type LibraryManifest", "type LoadedLibrary"];
+  const types = ["type FfiBackend", "type LibraryManifest", "type LoadedLibrary", "type RuntimePlatform"];
   if (needs.pointerValue) types.push("type XzPointerValue");
   return `import { ${[...values, ...types].join(", ")} } from ${JSON.stringify(module)};`;
 }
@@ -371,9 +371,11 @@ function emitBindFunction(
   lines.push("  );");
   lines.push("}");
   lines.push("");
-  lines.push("export async function loadPlatform(): Promise<Binding> {");
+  lines.push("export async function loadPlatform(platform?: RuntimePlatform): Promise<Binding> {");
   lines.push("  return createBinding(");
-  lines.push("    await loadPlatformLibrary(manifest, { expectedXzVersion: manifest.xzVersion }),");
+  lines.push(
+    "    await loadPlatformLibrary(manifest, { expectedXzVersion: manifest.xzVersion, platform }),",
+  );
   lines.push("  );");
   lines.push("}");
   lines.push("");

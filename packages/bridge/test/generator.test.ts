@@ -47,10 +47,11 @@ test("emits a loadPlatform entry that selects the backend from the runtime", () 
   const source = generateBinding(iface, options);
   assert.match(source, /import \{[^}]*loadPlatformLibrary[^}]*\} from "@xz-lang\/bridge"/);
   assert.match(source, /import \{[^}]*type LoadedLibrary[^}]*\} from "@xz-lang\/bridge"/);
-  assert.match(source, /export async function loadPlatform\(\): Promise<Binding> \{/);
+  assert.match(source, /import \{[^}]*type RuntimePlatform[^}]*\} from "@xz-lang\/bridge"/);
+  assert.match(source, /export async function loadPlatform\(platform\?: RuntimePlatform\): Promise<Binding> \{/);
   assert.match(
     source,
-    /await loadPlatformLibrary\(manifest, \{ expectedXzVersion: manifest\.xzVersion \}\)/,
+    /await loadPlatformLibrary\(manifest, \{ expectedXzVersion: manifest\.xzVersion, platform \}\)/,
   );
   assert.match(source, /function createBinding\(loaded: LoadedLibrary\): Binding \{/);
   assert.match(source, /return createBinding\(/);
