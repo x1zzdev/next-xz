@@ -228,6 +228,55 @@ test("koffi smoke: 64-bit ints cross as exact bigint, never a rounded number", a
     await rm(dir, { recursive: true, force: true });
   }
 });
+test("koffi smoke: the generated loadPlatform entry dispatches to the real koffi loader", async (t) => {
+  try {
+    const imported = await import("koffi");
+    void imported;
+  } catch {
+    t.skip("koffi is not installed");
+    return;
+  }
+  try {
+    execFileSync("cc", ["--version"], { stdio: "ignore" });
+  } catch {
+    t.skip("no C compiler available");
+    return;
+  }
+
+  const dir = await mkdtemp(join(tmpdir(), "next-xz-koffi-platform-"));
+  try {
+    const cFile = join(dir, "fixture.c");
+    const soFile = join(dir, "libfixture.so");
+    await writeFile(cFile, FIXTURE_C, "utf8");
+    execFileSync("cc", ["-shared", "-fPIC", "-o", soFile, cFile], { stdio: "pipe" });
+
+    const iface = parseInterface(INT_INTERFACE);
+    const source = generateBinding(iface, {
+      name: "libfixture",
+      libraryPath: soFile,
+      xzVersion: "test",
+      importFrom: BRIDGE_ENTRY,
+    });
+    const moduleFile = join(dir, "libfixture.ts");
+    await writeFile(moduleFile, source, "utf8");
+
+    const module = (await import(pathToFileURL(moduleFile).href)) as {
+      loadPlatform(platform?: string): Promise<{
+        add_i64(a: bigint, b: bigint): bigint;
+        close(): void;
+      }>;
+    };
+
+    // No explicit platform: detectPlatform must select the Node/koffi path from
+    // the ambient globals (no Bun, process.versions.node present).
+    const binding = await module.loadPlatform();
+    assert.equal(binding.add_i64(2n, 3n), 5n);
+    binding.close();
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 test("koffi smoke: a contracted wrapper reads the out value and raises the status error", async (t) => {
   let koffi: KoffiModule;
   try {
