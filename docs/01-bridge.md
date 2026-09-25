@@ -182,6 +182,17 @@ or a `@cstruct` therefore fails at load time with `BridgeRuntimeError`, whose
 message names the struct and points at the Node koffi loader. The loader never
 degrades the signature silently.
 
+The bridge types `bun:ffi` and `koffi` with its own minimal ambient declarations
+(`src/loader/bun-ffi.d.ts`, `src/loader/koffi.d.ts`) and does not adopt the
+global `bun-types` package. `bun-types` injects Bun's whole ambient environment
+into a package that is built and consumed on Node (the generated binding runs in
+a Next.js Node/Edge process), and the loader already owns an injectable
+structural interface (`BunFfiModule`) for testing. The hand-written declaration
+covers exactly the subset the loader uses. Because it is hand-written, the
+`BUN_FFI_TYPE_KEYS` contract is pinned against the real runtime: the Bun smoke
+test asserts every FFIType key the loader maps exists in `bun:ffi`'s `FFIType`
+table, so drift fails a test instead of failing at load time.
+
 The Node loader over `koffi` declares by-value structs, so `Str`/`Bytes`/
 `@cstruct` symbols load and call on Node: `koffi.struct` registers each layout
 (inner records first) and the registered type is used in the function

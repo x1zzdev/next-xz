@@ -29,6 +29,15 @@ const BUN_FFI_KEY: Readonly<Record<FfiScalar, string>> = {
   void: "void",
 };
 
+/**
+ * The `bun:ffi` `FFIType` keys the loader depends on. The bridge keeps its own
+ * minimal ambient declaration (`bun-ffi.d.ts`) instead of adopting the global
+ * `bun-types` package, so this list is the contract that the Bun smoke test
+ * pins against the real runtime's `FFIType` table. Any missing key would
+ * otherwise surface only at load time.
+ */
+export const BUN_FFI_TYPE_KEYS: readonly string[] = Object.freeze(Object.values(BUN_FFI_KEY));
+
 export class BunFfiBackend implements FfiBackend {
   constructor(private readonly ffi: BunFfiModule) {}
 

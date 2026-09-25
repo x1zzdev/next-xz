@@ -8,6 +8,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { test } from "node:test";
 
 import { generateBinding, parseInterface } from "../src/index.js";
+import { BUN_FFI_TYPE_KEYS } from "../src/loader/bun.js";
 
 const BRIDGE_ENTRY = new URL("../src/index.ts", import.meta.url).href;
 const PACKAGE_ROOT = fileURLToPath(new URL("..", import.meta.url));
@@ -34,6 +35,15 @@ const INT_INTERFACE =
 // override, and proves that ambient detection picked the bun:ffi backend.
 const RUNNER = `
 import assert from "node:assert/strict";
+
+const { FFIType } = await import("bun:ffi");
+for (const key of JSON.parse(process.env.XZ_BUN_FFI_KEYS)) {
+  assert.notEqual(
+    FFIType[key],
+    undefined,
+    "the minimal bun:ffi ambient declaration names an FFIType key the runtime lacks: " + key,
+  );
+}
 
 const mod = await import(process.env.XZ_BUN_MODULE);
 const binding = await mod.loadPlatform();
@@ -109,7 +119,11 @@ test("bun smoke: the generated loadPlatform entry dispatches to the real bun:ffi
     await writeFile(runnerFile, RUNNER, "utf8");
 
     const output = execFileSync(bun, [runnerFile], {
-      env: { ...process.env, XZ_BUN_MODULE: pathToFileURL(moduleFile).href },
+      env: {
+        ...process.env,
+        XZ_BUN_MODULE: pathToFileURL(moduleFile).href,
+        XZ_BUN_FFI_KEYS: JSON.stringify(BUN_FFI_TYPE_KEYS),
+      },
     });
     assert.match(output.toString(), /BUN_E2E_OK/);
   } finally {
