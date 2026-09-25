@@ -220,6 +220,16 @@ view would free the wrong allocation. `KoffiBackend` targets the current
 `lib.func(name, ret, args)` API and unwraps the CommonJS default export an ESM
 `import("koffi")` returns.
 
+`koffi` is an optional Node runtime peer, not a hard dependency. The loader
+imports it dynamically only when the Node backend is selected, and a missing
+package is a `BridgeRuntimeError` naming the fix; the package metadata matches
+that contract by declaring `koffi` under `peerDependencies` (marked optional) so
+the consuming application owns its native FFI runtime, plus `devDependencies` so
+the bridge's own smoke tests install it. The supported range is the verified 2.x
+line (`^2.16.3`); koffi 3.x changes the API surface and is unverified. `bun` is
+test-only: the Bun runtime is supplied by the deployment environment, so the
+`bun` package is a `devDependency` that exists only for the smoke test.
+
 The encode/decode of a JavaScript `string` or `Uint8Array` into an `XzStr`/
 `XzBytes` value belongs to the generated binding (§4.2), not the loader.
 
